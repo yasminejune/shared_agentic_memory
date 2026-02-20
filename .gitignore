@@ -1,0 +1,10 @@
+# Ignore a folder
+00_background/
+01_research_documents/
+.env
+
+# Ignore all files of a type
+*.log
+
+# Ignore a specific file
+secret.txt
