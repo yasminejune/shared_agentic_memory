@@ -1,0 +1,19 @@
+{
+  "name": "25-26_ce901-su_ce902-sp_frizlen_yasmine",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {},
+  "repository": {
+    "type": "git",
+    "url": "git@cseegit.essex.ac.uk:25-26-ce901-su-ce902-sp/25-26_CE901-SU_CE902-SP_frizlen_yasmine.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@types/node": "^25.4.0"
+  }
+}

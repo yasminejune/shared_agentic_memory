@@ -1,0 +1,9 @@
+langgraph~=1.0.9
+IPython~=9.10.0
+mistralai>=1.12.3
+dotenv
+greenlet>=3.1.0
+browsergym
+playwright>=1.58.0
+gymnasium>=1.2.3
+huggingface_hub
