@@ -1,11 +1,10 @@
 import gymnasium as gym
-import browsergym.core  # register the openended task as a gym environment
 
 env = gym.make(
-    "browsergym/openended", 
-    task_kwargs={"start_url": "https://www.google.com/"}, 
-    wait_for_user_message=True, 
-    headless=False
+    "browsergym/openended",
+    task_kwargs={"start_url": "https://www.google.com/"},
+    wait_for_user_message=True,
+    headless=False,
 )
 
 obs, info = env.reset()
