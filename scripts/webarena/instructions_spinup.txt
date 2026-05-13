@@ -1,0 +1,11 @@
+# Python 3.10+
+conda create -n webarena python=3.10; conda activate webarena
+pip install -r requirements.txt
+playwright install
+pip install -e .
+
+# optional, dev only
+pip install -e ".[dev]"
+mypy --install-types --non-interactive browser_env agents evaluation_harness
+pip install pre-commit
+pre-commit install

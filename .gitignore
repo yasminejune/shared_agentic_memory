@@ -1,10 +1,19 @@
 # Ignore a folder
 00_background/
 01_research_documents/
-.env
+venv/
 
 # Ignore all files of a type
 *.log
 
 # Ignore a specific file
 secret.txt
+.env
+
+# Playwright
+node_modules/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
