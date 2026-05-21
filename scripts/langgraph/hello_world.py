@@ -1,7 +1,9 @@
-from langgraph.graph import StateGraph, MessagesState, START, END
+from langgraph.graph import END, START, MessagesState, StateGraph
+
 
 def mock_llm(state: MessagesState):
     return {"messages": [{"role": "ai", "content": "hello world"}]}
+
 
 graph = StateGraph(MessagesState)
 graph.add_node(mock_llm)

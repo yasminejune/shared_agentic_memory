@@ -1,19 +1,50 @@
 # Ignore a folder
-00_background/
-01_research_documents/
 venv/
+.claude/
+.vscode/
+docs/00_background/
+docs/01_research_documents/
+docs/02_proposal/
 
 # Ignore all files of a type
 *.log
+CLAUDE.md
 
 # Ignore a specific file
 secret.txt
 .env
 
 # Playwright
-node_modules/
-/test-results/
-/playwright-report/
-/blob-report/
-/playwright/.cache/
-/playwright/.auth/
+/scripts/playwright/node_modules/
+/scripts/playwright/test-results/
+/scripts/playwright/playwright-report/
+/scripts/playwright/blob-report/
+/scripts/playwright/.cache/
+/scripts/playwright/.auth/
+
+# Python build artifacts
+__pycache__/
+*.py[cod]
+*.so
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Virtual environments
+.venv/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+
+# Linting
+.ruff_cache/
+
+# Jupyter
+.ipynb_checkpoints/

@@ -1,5 +1,6 @@
-from browser_env import ScriptBrowserEnv, create_id_based_action
 import random
+
+from browser_env import ScriptBrowserEnv, create_id_based_action
 
 # init the environment
 env = ScriptBrowserEnv(
@@ -15,7 +16,7 @@ obs, info = env.reset(options={"config_file": config_file})
 
 # create a random action
 id = random.randint(0, 1000)
-action = create_id_based_action(f"click [id]")
+action = create_id_based_action("click [id]")
 
 # take the action
 obs, _, terminated, _, info = env.step(action)

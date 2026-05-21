@@ -1,10 +1,12 @@
-
-from langgraph.graph import StateGraph, START, END
-from typing import TypedDict
 import subprocess
+from typing import TypedDict
+
+from langgraph.graph import END, START, StateGraph
+
 
 class State(TypedDict):
     message: str
+
 
 def main():
     workflow = StateGraph(State)
@@ -25,11 +27,14 @@ def main():
         f.write(app.get_graph().draw_mermaid_png())
     subprocess.run(["open", "graph.png"])  # macOS: opens in Preview
 
+
 def node1(state: State) -> State:
     return {"message": state["message"] + " I reached Node1."}
 
+
 def node2(state: State) -> State:
     return {"message": state["message"] + " I reached Node2."}
+
 
 if __name__ == "__main__":
     main()

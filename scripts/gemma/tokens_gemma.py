@@ -1,8 +1,9 @@
-from transformers import AutoTokenizer, AutoModelForCausalLM
-import torch
-from huggingface_hub import login
-from dotenv import load_dotenv
 import os
+
+import torch
+from dotenv import load_dotenv
+from huggingface_hub import login
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 load_dotenv()
 
@@ -12,7 +13,7 @@ login(access_token)
 model_name = "google/gemma-2-2b-it"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForCausalLM.from_pretrained(
-    model_name, 
+    model_name,
     dtype=torch.float32,
 )
 model.eval()
