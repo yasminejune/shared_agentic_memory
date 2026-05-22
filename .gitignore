@@ -48,3 +48,14 @@ htmlcov/
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Github
+.github/
+
+# Decision memory system (transient files; decisions.md itself should be tracked)
+.claude/memory/.last-curated-sha
+.claude/memory/curator.log
+
+# Thesis task curator (transient files; tasks.md itself should be tracked)
+.claude/thesis/.last-curated-sha
+.claude/thesis/curator.log

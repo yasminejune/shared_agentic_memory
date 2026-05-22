@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>TAO Single Step Fixture</title>
+  </head>
+  <body>
+    <h1 id="heading">TAO Single Step Fixture</h1>
+    <button id="go">Go</button>
+    <div id="success" style="display:none">Success</div>
+    <script>
+      document.getElementById("go").addEventListener("click", function () {
+        document.getElementById("success").style.display = "block";
+      });
+    </script>
+  </body>
+</html>
