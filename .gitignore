@@ -52,6 +52,9 @@ htmlcov/
 # Github
 .github/
 
+# Githooks
+.githooks/
+
 # Decision memory system (transient files; decisions.md itself should be tracked)
 .claude/memory/.last-curated-sha
 .claude/memory/curator.log
