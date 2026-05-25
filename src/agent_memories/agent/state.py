@@ -21,6 +21,7 @@ class AgentState(TypedDict):
     action: dict[str, Any]
     step: int
     done: bool
+    memories: list[str]
 
 
 def new_state(aim: str) -> AgentState:
@@ -33,4 +34,5 @@ def new_state(aim: str) -> AgentState:
         action={},
         step=0,
         done=False,
+        memories=[],
     )
