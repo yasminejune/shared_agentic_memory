@@ -21,6 +21,7 @@ import pytest
 from playwright.sync_api import sync_playwright
 
 from agent_memories.agent import build_graph, new_state
+from agent_memories.agent.nodes import make_think_scripted
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = REPO_ROOT / "tests" / "data" / "single_step.html"
@@ -37,7 +38,7 @@ def test_single_step_clicks_button_and_reveals_success() -> None:
             page = browser.new_page()
             page.goto(FIXTURE.as_uri())
 
-            graph = build_graph(page, stub_actions)
+            graph = build_graph(page, make_think_scripted(stub_actions))
             result = graph.invoke(state)
 
             assert result["done"] is True

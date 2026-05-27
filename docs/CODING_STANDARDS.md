@@ -8,6 +8,25 @@ make install
 
 Installs all production and development dependencies (pytest, black, ruff, mypy, ipython) from `pyproject.toml` and the Chromium binary Playwright drives.
 
+### Ollama (required from WP1.3 onwards)
+
+The WP1.3 Think node defaults to a local open-weight model served by [Ollama](https://ollama.com), so an Ollama install and a pulled model are runtime prerequisites for `scripts/langgraph/WP1_3.py` (and anything downstream that uses `agent_memories.services.ollama_client.OllamaClient`). `make install` does **not** handle this — Ollama is a brew install, not a pip package.
+
+```bash
+brew install ollama
+ollama serve &                    # start the local server on http://localhost:11434
+ollama pull qwen3.5:4b-nvfp4      # project default (MLX-tagged)
+```
+
+`qwen3.5:4b-nvfp4` is the **project default** — 4 B dense, NVFP4 4-bit, ~4 GB on disk via Ollama. It is exposed in code as `scripts.langgraph.WP1_3.QWEN_MODEL` and at the CLI as `--model qwen` (`--model mistral` switches to the cloud Mistral API). The smaller-but-MLX-tagged variant was chosen over `qwen3:8b` because on Apple Silicon Ollama auto-routes MLX-tagged models through its `--mlx-engine` runner subprocess, exploiting the M5 Neural Accelerators. Measured payoff at the loop's 12 000-char observation cap: ~25 s/Think (`qwen3:8b` on ggml/Metal) -> ~5 s/Think (`qwen3.5:4b-nvfp4` on MLX), roughly 5x. The Qwen3 family has no MLX variant in the Ollama registry, so staying on `qwen3:8b` would forfeit the speedup; only Qwen3.5 ships with MLX tags.
+
+Confirm MLX actually engaged on first chat call (otherwise the speedup will not materialise — see Ollama issues [#15642](https://github.com/ollama/ollama/issues/15642) and [#15433](https://github.com/ollama/ollama/issues/15433) for known M5 GPU-detection bugs):
+
+```bash
+ps aux | grep 'ollama runner --mlx-engine' | grep -v grep   # should show the subprocess
+curl -s http://localhost:11434/api/tags | grep qwen3.5      # should list qwen3.5:4b-nvfp4
+```
+
 ---
 
 ## Remotes
