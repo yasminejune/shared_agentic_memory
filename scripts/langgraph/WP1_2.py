@@ -13,6 +13,7 @@ from __future__ import annotations
 from playwright.sync_api import sync_playwright
 
 from agent_memories.agent import build_graph, new_state
+from agent_memories.agent.nodes import make_think_scripted
 
 WEBSITE = "https://www.amazon.co.uk"
 
@@ -29,7 +30,7 @@ def main() -> None:
         try:
             page = browser.new_page()
             page.goto(WEBSITE)
-            graph = build_graph(page, stub_actions)
+            graph = build_graph(page, make_think_scripted(stub_actions))
             result = graph.invoke(state)
             print(result)
         finally:
