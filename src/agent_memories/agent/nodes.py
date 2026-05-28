@@ -47,6 +47,16 @@ NodeFn = Callable[[AgentState], AgentState]
 # history within a 32k context.
 OBSERVATION_CHAR_BUDGET = 12_000
 
+# How many consecutive identical ``thought`` records terminate the loop.
+# Both pathologies we saw in WP1.5 dev runs -- repeated parse failures
+# on a multi-line LLM reply and repeated identical clicks on a page
+# whose state never advances -- manifest as the *same* raw LLM string
+# being appended to history N turns in a row. Aborting after 5 of
+# those frees the runner to fall through to ``MemoryPipeline.create_from_run``
+# so the run still produces a memory rather than spinning out
+# ``max_steps`` worth of identical wasted turns.
+DEFAULT_STUCK_THRESHOLD = 5
+
 
 def _trace(line: str) -> None:
     """Print a single trace line to stdout, flushed."""
@@ -118,7 +128,11 @@ def make_think_scripted(actions: list[dict[str, Any]]) -> NodeFn:
     return think
 
 
-def make_think(client: ChatClient) -> NodeFn:
+def make_think(
+    client: ChatClient,
+    *,
+    stuck_threshold: int = DEFAULT_STUCK_THRESHOLD,
+) -> NodeFn:
     """Return a Think node that asks ``client`` for one grammar-locked action.
 
     The factory closes over the chat client so the LangGraph node keeps
@@ -126,6 +140,9 @@ def make_think(client: ChatClient) -> NodeFn:
 
     * assembles a user prompt from the aim, the running history, and
       the (size-capped) ARIA-tree observation;
+    * short-circuits as ``stuck`` when the tail of ``history`` shows
+      ``stuck_threshold`` consecutive turns with the same ``thought``
+      (no LLM call wasted on that turn);
     * calls ``client.chat`` once and runs the reply through
       :func:`parse_action`;
     * routes the outcome through ``state``: a ``stop`` reply flips
@@ -142,6 +159,9 @@ def make_think(client: ChatClient) -> NodeFn:
     """
 
     def think(state: AgentState) -> AgentState:
+        if _is_stuck(state["history"], stuck_threshold):
+            return _record_stuck_abort(state, threshold=stuck_threshold)
+
         user_prompt = _build_user_prompt(state)
         raw = client.chat(THINK_SYSTEM_PROMPT, user_prompt).strip()
 
@@ -172,6 +192,49 @@ def make_think(client: ChatClient) -> NodeFn:
     return think
 
 
+def _is_stuck(history: list[dict[str, Any]], threshold: int) -> bool:
+    """Return True when the last ``threshold`` records share one ``thought``.
+
+    The signature is the raw LLM reply: a parse-failure record stores it
+    verbatim, and a successful Act record stores the same string under
+    ``thought`` after Act has dispatched. So a thought-equality check
+    catches both the "LLM keeps emitting an unparseable line" loop and
+    the "LLM keeps emitting the same valid action on an unchanging page"
+    loop without false-positives from dynamic-observation noise.
+    """
+    if threshold < 2 or len(history) < threshold:
+        return False
+    tail = history[-threshold:]
+    first_thought = tail[0].get("thought", "")
+    if not first_thought:
+        return False
+    return all(r.get("thought", "") == first_thought for r in tail)
+
+
+def _record_stuck_abort(state: AgentState, *, threshold: int) -> AgentState:
+    """Flip ``done`` and append a ``stuck`` record so the run terminates.
+
+    Sets ``done=True`` (graph router sends us straight to END) and stamps
+    the final history record with ``outcome: "stuck: ..."``. That marker
+    is the signal the WP1.5 memory pipeline (and WP1.6 ReasoningBank's
+    success/failure split) reads to know the run was unsuccessful.
+    """
+    _trace(f"[Think]: (stuck-detector aborted run after {threshold} identical replies)")
+    record = {
+        "step": state["step"],
+        "thought": "(stuck-detector aborted run)",
+        "action": {},
+        "outcome": f"stuck: same thought repeated {threshold} times",
+    }
+    return {
+        **state,
+        "thought": "(stuck)",
+        "action": {},
+        "done": True,
+        "history": [*state["history"], record],
+    }
+
+
 def _record_think_failure(state: AgentState, *, raw: str, outcome: str) -> AgentState:
     """Log a Think-side parse failure to history and advance ``step``.
 
@@ -199,9 +262,12 @@ def _record_think_failure(state: AgentState, *, raw: str, outcome: str) -> Agent
 def _build_user_prompt(state: AgentState) -> str:
     tree_yaml = state.get("observation", {}).get("tree_yaml", "")
     capped_tree = _truncate_observation(tree_yaml, OBSERVATION_CHAR_BUDGET)
-    return "\n".join(
+    sections: list[str] = [f"Aim: {state['aim']}"]
+    memories = state.get("memories", [])
+    if memories:
+        sections.extend(["", "Relevant prior memories:", _format_memories(memories)])
+    sections.extend(
         [
-            f"Aim: {state['aim']}",
             "",
             "History (most recent last):",
             _format_history(state.get("history", [])),
@@ -212,6 +278,18 @@ def _build_user_prompt(state: AgentState) -> str:
             "Reply with exactly one grammar line.",
         ]
     )
+    return "\n".join(sections)
+
+
+def _format_memories(memories: list[str]) -> str:
+    """Render retrieved memories as a numbered block for the Think prompt.
+
+    WP1.5 populates ``state['memories']`` once at run start with the top-k
+    matches for the aim (per the runner in :mod:`scripts.memories.WP1_5`).
+    The Think node treats the list as opaque: it is the runner's job to
+    decide what gets retrieved and how many.
+    """
+    return "\n".join(f"  {i + 1}. {m}" for i, m in enumerate(memories))
 
 
 def _truncate_observation(tree_yaml: str, budget: int) -> str:

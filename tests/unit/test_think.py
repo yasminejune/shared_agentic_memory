@@ -227,6 +227,162 @@ def test_parse_failure_outcome_has_no_hint_appended() -> None:
 
 
 @pytest.mark.unit
+def test_retrieved_memories_appear_in_user_prompt() -> None:
+    """WP1.5: ``state['memories']`` must be spliced into the Think prompt.
+
+    The memories list is populated once at run start by the WP1.5 runner
+    (top-k matches for the aim). The Think node treats it as opaque
+    text and renders it as a numbered block between the aim and the
+    history. An empty list must produce no memory block at all so the
+    WP1.3/1.4 prompts stay byte-identical when no retrieval ran.
+    """
+    client = _FakeClient(["click [e1]"])
+    state = _seed_state()
+    state["memories"] = [
+        "Dismiss the cookie banner before searching.",
+        "Use Enter to submit the search box.",
+    ]
+
+    make_think(client)(state)
+
+    user_prompt = client.calls[0]["user"]
+    assert "Relevant prior memories:" in user_prompt
+    assert "1. Dismiss the cookie banner before searching." in user_prompt
+    assert "2. Use Enter to submit the search box." in user_prompt
+    aim_index = user_prompt.index("Aim: Click Go")
+    memories_index = user_prompt.index("Relevant prior memories:")
+    history_index = user_prompt.index("History (most recent last):")
+    assert aim_index < memories_index < history_index
+
+
+@pytest.mark.unit
+def test_empty_memories_list_omits_memory_block() -> None:
+    """An empty ``state['memories']`` must not introduce any memory header."""
+    client = _FakeClient(["click [e1]"])
+    state = _seed_state()
+    state["memories"] = []
+
+    make_think(client)(state)
+
+    user_prompt = client.calls[0]["user"]
+    assert "Relevant prior memories:" not in user_prompt
+
+
+@pytest.mark.unit
+def test_stuck_detector_aborts_on_repeated_parse_failures() -> None:
+    """Five identical parse-failure records in a row must abort the run.
+
+    A multi-line LLM reply like ``type [e1] "x"\\nenter`` produces the
+    same parse-failure record each turn. After ``stuck_threshold``
+    consecutive identical records, Think must short-circuit (no LLM
+    call) and emit a ``stuck`` outcome so the runner can fall through
+    to ``MemoryPipeline.create_from_run``.
+    """
+    client = _FakeClient([])  # must not be called
+    think = make_think(client, stuck_threshold=5)
+
+    state = _seed_state()
+    state["history"] = [
+        {
+            "step": i,
+            "thought": 'type [e1] "x"\nenter',
+            "action": {},
+            "outcome": "parse_failure: Action must be a single line, got: ...",
+        }
+        for i in range(5)
+    ]
+
+    result = think(state)
+
+    assert result["done"] is True
+    assert client.calls == [], "Think must not consult the LLM once stuck"
+    assert result["history"][-1]["outcome"].startswith("stuck:")
+    assert result["action"] == {}
+
+
+@pytest.mark.unit
+def test_stuck_detector_aborts_on_repeated_successful_acts() -> None:
+    """Five identical successful Act records in a row must abort the run.
+
+    When the page state doesn't advance, the LLM keeps proposing the
+    same valid action and Act keeps writing identical records. The
+    stuck check is on ``thought``, not ``outcome``, so this terminates
+    the same way as the parse-failure case.
+    """
+    client = _FakeClient([])
+    think = make_think(client, stuck_threshold=5)
+
+    state = _seed_state()
+    state["history"] = [
+        {
+            "step": i,
+            "thought": "click [e118]",
+            "action": {"type": "click", "ref": "e118"},
+            "outcome": "ok",
+        }
+        for i in range(5)
+    ]
+
+    result = think(state)
+
+    assert result["done"] is True
+    assert client.calls == []
+    assert "stuck" in result["history"][-1]["outcome"]
+
+
+@pytest.mark.unit
+def test_stuck_detector_threshold_is_configurable() -> None:
+    """A custom ``stuck_threshold`` must take effect.
+
+    With ``stuck_threshold=3`` and three identical records, Think must
+    abort. Below the threshold the LLM is consulted as usual.
+    """
+    client = _FakeClient(["click [e1]"])
+    think = make_think(client, stuck_threshold=3)
+
+    state_below = _seed_state()
+    state_below["history"] = [
+        {"step": i, "thought": "click [e118]", "action": {}, "outcome": "ok"} for i in range(2)
+    ]
+    think(state_below)
+    assert len(client.calls) == 1, "two identical records is below threshold=3"
+
+    state_at = _seed_state()
+    state_at["history"] = [
+        {"step": i, "thought": "click [e118]", "action": {}, "outcome": "ok"} for i in range(3)
+    ]
+    result = think(state_at)
+    assert result["done"] is True
+    assert len(client.calls) == 1, "stuck must not consult the LLM again"
+
+
+@pytest.mark.unit
+def test_stuck_detector_ignores_non_consecutive_repeats() -> None:
+    """Five matching records broken by a different one must NOT abort.
+
+    The check is run-length at the tail, not overall frequency. One
+    different reply in the middle resets the count.
+    """
+    client = _FakeClient(["click [e1]"])
+    think = make_think(client, stuck_threshold=5)
+
+    state = _seed_state()
+    state["history"] = [
+        {"step": 0, "thought": "click [e1]", "action": {}, "outcome": "ok"},
+        {"step": 1, "thought": "click [e1]", "action": {}, "outcome": "ok"},
+        {"step": 2, "thought": "click [e2]", "action": {}, "outcome": "ok"},
+        {"step": 3, "thought": "click [e1]", "action": {}, "outcome": "ok"},
+        {"step": 4, "thought": "click [e1]", "action": {}, "outcome": "ok"},
+        {"step": 5, "thought": "click [e1]", "action": {}, "outcome": "ok"},
+    ]
+
+    result = think(state)
+
+    assert result["done"] is False
+    assert len(client.calls) == 1, "non-consecutive repeats must not trip the detector"
+
+
+@pytest.mark.unit
 def test_chat_exception_propagates() -> None:
     """Any ``client.chat`` exception must reach the runner, not the history.
 
