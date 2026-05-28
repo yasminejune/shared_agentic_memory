@@ -21,7 +21,7 @@ from dotenv import load_dotenv
 from playwright.sync_api import sync_playwright
 
 from agent_memories.agent import build_graph, new_state
-from agent_memories.agent.nodes import make_think
+from agent_memories.agent.nodes import DEFAULT_STUCK_THRESHOLD, make_think
 from agent_memories.agent.state import AgentState
 from agent_memories.services.mistral_client import MistralClient
 from agent_memories.services.ollama_client import OllamaClient
@@ -56,6 +56,15 @@ def main(argv: list[str] | None = None) -> AgentState:
     parser.add_argument("--aim", default=DEFAULT_AIM)
     parser.add_argument("--max-steps", type=int, default=DEFAULT_MAX_STEPS)
     parser.add_argument("--headless", action="store_true")
+    parser.add_argument(
+        "--stuck-threshold",
+        type=int,
+        default=DEFAULT_STUCK_THRESHOLD,
+        help=(
+            "Abort the run as 'stuck' when this many consecutive Think turns "
+            "produce identical replies (default: 5)."
+        ),
+    )
     args = parser.parse_args(argv)
 
     load_dotenv()
@@ -66,7 +75,11 @@ def main(argv: list[str] | None = None) -> AgentState:
         try:
             page = browser.new_page()
             page.goto(args.url)
-            graph = build_graph(page, make_think(client), max_steps=args.max_steps)
+            graph = build_graph(
+                page,
+                make_think(client, stuck_threshold=args.stuck_threshold),
+                max_steps=args.max_steps,
+            )
             return graph.invoke(state)
         finally:
             browser.close()

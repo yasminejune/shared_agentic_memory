@@ -24,7 +24,7 @@ from playwright.sync_api import Page
 from .nodes import NodeFn, make_act, make_observe
 from .state import AgentState
 
-DEFAULT_MAX_STEPS = 30
+DEFAULT_MAX_STEPS = 10
 
 
 def build_graph(page: Page, think_fn: NodeFn, *, max_steps: int = DEFAULT_MAX_STEPS) -> Any:

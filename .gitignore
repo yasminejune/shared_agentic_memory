@@ -62,3 +62,6 @@ htmlcov/
 # Thesis task curator (transient files; tasks.md itself should be tracked)
 .claude/thesis/.last-curated-sha
 .claude/thesis/curator.log
+
+# WP1.5 runtime memory stores (seed fixtures live under tests/data/memories/)
+data/memories/
