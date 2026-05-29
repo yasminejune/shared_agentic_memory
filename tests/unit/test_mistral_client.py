@@ -43,8 +43,8 @@ def test_chat_returns_completion_on_success(monkeypatch: pytest.MonkeyPatch) -> 
     client = _make_client()
     calls: list[dict[str, Any]] = []
 
-    def fake_complete(messages: list[dict[str, Any]], temperature: float) -> str:
-        calls.append({"messages": messages, "temperature": temperature})
+    def fake_complete(messages: list[dict[str, Any]], temperature: float, max_tokens: int) -> str:
+        calls.append({"messages": messages, "temperature": temperature, "max_tokens": max_tokens})
         return "click [e1]"
 
     monkeypatch.setattr(client, "_complete", fake_complete)
@@ -54,10 +54,30 @@ def test_chat_returns_completion_on_success(monkeypatch: pytest.MonkeyPatch) -> 
     assert result == "click [e1]"
     assert len(calls) == 1
     assert calls[0]["temperature"] == 0.0
+    assert calls[0]["max_tokens"] == 64
     assert calls[0]["messages"] == [
         {"role": "system", "content": "sys"},
         {"role": "user", "content": "usr"},
     ]
+
+
+@pytest.mark.unit
+def test_chat_max_tokens_kwarg_overrides_constructor_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The WP1.6 pipeline raises ``max_tokens`` per call; the Think default stays at 64."""
+    client = _make_client()
+    seen: dict[str, Any] = {}
+
+    def fake_complete(messages: list[dict[str, Any]], temperature: float, max_tokens: int) -> str:
+        seen["max_tokens"] = max_tokens
+        return "ok"
+
+    monkeypatch.setattr(client, "_complete", fake_complete)
+
+    client.chat("sys", "usr", max_tokens=512)
+
+    assert seen["max_tokens"] == 512
 
 
 @pytest.mark.unit
@@ -66,7 +86,7 @@ def test_chat_propagates_429_without_retry(monkeypatch: pytest.MonkeyPatch) -> N
     client = _make_client()
     attempts = {"n": 0}
 
-    def fake_complete(messages: list[dict[str, Any]], temperature: float) -> str:
+    def fake_complete(messages: list[dict[str, Any]], temperature: float, max_tokens: int) -> str:
         attempts["n"] += 1
         raise _sdk_error(429)
 
@@ -83,7 +103,7 @@ def test_chat_propagates_non_429_without_retry(monkeypatch: pytest.MonkeyPatch) 
     client = _make_client()
     attempts = {"n": 0}
 
-    def fake_complete(messages: list[dict[str, Any]], temperature: float) -> str:
+    def fake_complete(messages: list[dict[str, Any]], temperature: float, max_tokens: int) -> str:
         attempts["n"] += 1
         raise _sdk_error(500)
 

@@ -40,9 +40,9 @@ class Embedder:
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
         """Return one embedding per input string.
 
-        Batches via the underlying model's ``encode`` call so seeding a
-        store with many memories at once is much faster than calling
-        :meth:`embed` in a loop.
+        Batches via the underlying model's ``encode`` call so embedding
+        many strings at once is much faster than calling :meth:`embed`
+        in a loop.
         """
         if not texts:
             return []

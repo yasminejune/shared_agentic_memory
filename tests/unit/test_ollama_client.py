@@ -121,3 +121,41 @@ def test_num_predict_is_configurable() -> None:
     client.chat("sys", "usr")
 
     assert captured["json"]["options"]["num_predict"] == 128
+
+
+@pytest.mark.unit
+def test_chat_max_tokens_kwarg_overrides_constructor_default() -> None:
+    """The WP1.6 pipeline raises ``max_tokens`` per call; the constructor cap stays at 64."""
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["json"] = json.loads(request.content)
+        return httpx.Response(
+            200,
+            json={"message": {"role": "assistant", "content": "ok"}},
+        )
+
+    client = _make_client_with_mock(handler)
+
+    client.chat("sys", "usr", max_tokens=512)
+
+    assert captured["json"]["options"]["num_predict"] == 512
+
+
+@pytest.mark.unit
+def test_chat_max_tokens_none_falls_back_to_constructor_default() -> None:
+    """Omitting ``max_tokens`` must use the constructor's ``num_predict`` (Think default)."""
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["json"] = json.loads(request.content)
+        return httpx.Response(
+            200,
+            json={"message": {"role": "assistant", "content": "ok"}},
+        )
+
+    client = _make_client_with_mock(handler)
+
+    client.chat("sys", "usr")
+
+    assert captured["json"]["options"]["num_predict"] == 64

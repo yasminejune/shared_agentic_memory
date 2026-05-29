@@ -1,4 +1,4 @@
-"""Unit tests for :class:`MemoryStore`.
+"""Unit tests for :class:`MemoryStore` under the WP1.6 schema.
 
 A deterministic in-memory ``FakeEmbedder`` is injected so the tests are
 fast and never load the real sentence-transformers model. The fake
@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from agent_memories.memory.store import Memory, MemoryStore
+from agent_memories.memory.store import MemoryEntry, MemoryItem, MemoryStore
 
 
 class _FakeEmbedder:
@@ -46,28 +46,40 @@ def _make_store(tmp_path: Path, mapping: dict[str, list[float]]) -> MemoryStore:
     return MemoryStore(path=path, user_id="user_a", embedder=_FakeEmbedder(mapping))
 
 
+def _item(title: str = "t", description: str = "d", content: str = "c") -> MemoryItem:
+    return MemoryItem(title=title, description=description, content=content)
+
+
 @pytest.mark.unit
-def test_add_persists_to_disk_and_returns_memory(tmp_path: Path) -> None:
-    """``add`` must write a JSONL line and return a populated :class:`Memory`."""
-    store = _make_store(tmp_path, {"first memory": [1.0, 0.0, 0.0]})
+def test_add_entry_persists_to_disk_and_returns_entry(tmp_path: Path) -> None:
+    """``add_entry`` must write a JSONL line and return a populated entry."""
+    store = _make_store(tmp_path, {"first query": [1.0, 0.0, 0.0]})
 
-    memory = store.add("first memory")
+    entry = store.add_entry(
+        query="first query",
+        outcome="successful",
+        items=[_item(title="t1", description="d1", content="c1")],
+    )
 
-    assert memory.text == "first memory"
-    assert memory.user_id == "user_a"
-    assert memory.embedding == [1.0, 0.0, 0.0]
-    assert memory.created_at != ""
+    assert entry.query == "first query"
+    assert entry.user_id == "user_a"
+    assert entry.outcome == "successful"
+    assert entry.embedding == [1.0, 0.0, 0.0]
+    assert entry.created_at != ""
+    assert [it.title for it in entry.items] == ["t1"]
 
     raw_line = store.path.read_text(encoding="utf-8").strip()
     parsed = json.loads(raw_line)
-    assert parsed["text"] == "first memory"
+    assert parsed["query"] == "first query"
     assert parsed["user_id"] == "user_a"
+    assert parsed["outcome"] == "successful"
     assert parsed["embedding"] == [1.0, 0.0, 0.0]
+    assert parsed["items"] == [{"title": "t1", "description": "d1", "content": "c1"}]
 
 
 @pytest.mark.unit
-def test_search_returns_top_k_by_cosine(tmp_path: Path) -> None:
-    """``search`` must return memories sorted by descending cosine similarity."""
+def test_search_returns_top_k_by_cosine_over_queries(tmp_path: Path) -> None:
+    """``search`` ranks entries by cosine similarity over the query embedding."""
     mapping = {
         "apples": [1.0, 0.0, 0.0],
         "pears": [0.9, 0.1, 0.0],
@@ -75,11 +87,12 @@ def test_search_returns_top_k_by_cosine(tmp_path: Path) -> None:
         "query about fruit": [1.0, 0.0, 0.0],
     }
     store = _make_store(tmp_path, mapping)
-    store.add_many(["apples", "pears", "trains"])
+    for q in ("apples", "pears", "trains"):
+        store.add_entry(query=q, outcome="successful", items=[_item(content=q)])
 
     top2 = store.search("query about fruit", k=2)
 
-    assert [m.text for m in top2] == ["apples", "pears"]
+    assert [e.query for e in top2] == ["apples", "pears"]
 
 
 @pytest.mark.unit
@@ -99,17 +112,18 @@ def test_search_caps_at_store_size(tmp_path: Path) -> None:
         "query": [1.0, 0.0],
     }
     store = _make_store(tmp_path, mapping)
-    store.add_many(["one", "two"])
+    for q in ("one", "two"):
+        store.add_entry(query=q, outcome="successful", items=[_item(content=q)])
 
     results = store.search("query", k=10)
 
     assert len(results) == 2
-    assert results[0].text == "one"
+    assert results[0].query == "one"
 
 
 @pytest.mark.unit
 def test_load_round_trip_skips_re_embedding(tmp_path: Path) -> None:
-    """A second ``MemoryStore.load`` must read the JSONL without re-embedding.
+    """A second :meth:`MemoryStore.load` must read the JSONL without re-embedding.
 
     We swap in a *different* embedder (mapping every string to the wrong
     vector) and check that ``search`` still works against the cached
@@ -123,7 +137,8 @@ def test_load_round_trip_skips_re_embedding(tmp_path: Path) -> None:
         "query": [1.0, 0.0, 0.0],
     }
     store = _make_store(tmp_path, seed_mapping)
-    store.add_many(["alpha", "beta"])
+    for q in ("alpha", "beta"):
+        store.add_entry(query=q, outcome="successful", items=[_item(content=q)])
 
     poison_mapping = {
         "alpha": [0.0, 1.0, 0.0],
@@ -138,7 +153,7 @@ def test_load_round_trip_skips_re_embedding(tmp_path: Path) -> None:
 
     assert len(reloaded) == 2
     top1 = reloaded.search("query", k=1)
-    assert top1[0].text == "alpha"
+    assert top1[0].query == "alpha"
 
 
 @pytest.mark.unit
@@ -156,8 +171,8 @@ def test_load_missing_file_yields_empty_store(tmp_path: Path) -> None:
 
 
 @pytest.mark.unit
-def test_add_creates_parent_directory(tmp_path: Path) -> None:
-    """The store must create missing parent directories on first ``add``."""
+def test_add_entry_creates_parent_directory(tmp_path: Path) -> None:
+    """The store must create missing parent directories on first ``add_entry``."""
     nested = tmp_path / "deep" / "nested" / "user_a.jsonl"
     store = MemoryStore(
         path=nested,
@@ -165,19 +180,40 @@ def test_add_creates_parent_directory(tmp_path: Path) -> None:
         embedder=_FakeEmbedder({"hello": [1.0]}),
     )
 
-    store.add("hello")
+    store.add_entry(query="hello", outcome="successful", items=[_item(content="hi")])
 
     assert nested.exists()
 
 
 @pytest.mark.unit
-def test_memory_from_jsonl_dict_handles_missing_optional_fields() -> None:
-    """Older or hand-written JSONL records may omit metadata/created_at."""
-    record = {"text": "minimal", "user_id": "user_a"}
+def test_entry_from_jsonl_dict_handles_missing_optional_fields() -> None:
+    """Older or hand-written JSONL records may omit embedding/created_at."""
+    record = {
+        "user_id": "user_a",
+        "query": "minimal",
+        "outcome": "failed",
+        "items": [{"title": "t", "description": "d", "content": "c"}],
+    }
 
-    memory = Memory.from_jsonl_dict(record)
+    entry = MemoryEntry.from_jsonl_dict(record)
 
-    assert memory.text == "minimal"
-    assert memory.metadata == {}
-    assert memory.embedding is None
-    assert memory.created_at == ""
+    assert entry.query == "minimal"
+    assert entry.outcome == "failed"
+    assert entry.embedding is None
+    assert entry.created_at == ""
+    assert entry.items[0].title == "t"
+
+
+@pytest.mark.unit
+def test_unknown_outcome_defaults_to_failed() -> None:
+    """A hand-edited JSONL line with a typo must not be hoisted to ``successful``."""
+    record = {
+        "user_id": "user_a",
+        "query": "q",
+        "outcome": "yes-please",
+        "items": [],
+    }
+
+    entry = MemoryEntry.from_jsonl_dict(record)
+
+    assert entry.outcome == "failed"

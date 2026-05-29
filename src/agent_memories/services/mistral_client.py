@@ -79,8 +79,19 @@ class MistralClient:
         self.model = model
         self.max_response_tokens = max_response_tokens
 
-    def chat(self, system: str, user: str, *, temperature: float = 0.0) -> str:
+    def chat(
+        self,
+        system: str,
+        user: str,
+        *,
+        temperature: float = 0.0,
+        max_tokens: int | None = None,
+    ) -> str:
         """Send a single system+user turn and return the assistant text.
+
+        ``max_tokens`` overrides the constructor's ``max_response_tokens``
+        for a single call; the Think node leaves it at ``None`` (64-token
+        cap), the WP1.6 pipeline raises it for the judge and extractor.
 
         Any ``SDKError`` (including HTTP 429 rate-limit) propagates
         immediately so the caller can switch model or surface the
@@ -94,14 +105,20 @@ class MistralClient:
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ]
-        return self._complete(messages, temperature)
+        effective_max_tokens = self.max_response_tokens if max_tokens is None else max_tokens
+        return self._complete(messages, temperature, effective_max_tokens)
 
-    def _complete(self, messages: list[dict[str, Any]], temperature: float) -> str:
+    def _complete(
+        self,
+        messages: list[dict[str, Any]],
+        temperature: float,
+        max_tokens: int,
+    ) -> str:
         response: Any = self._client.chat.complete(
             model=self.model,
             messages=messages,  # type: ignore[arg-type]
             temperature=temperature,
-            max_tokens=self.max_response_tokens,
+            max_tokens=max_tokens,
         )
         content = response.choices[0].message.content
         if content is None:

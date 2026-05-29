@@ -1,15 +1,17 @@
 """Smoke harness for ``MemoryPipeline.create_from_run``.
 
-Runs the WP1.5 memory curator against a handful of hand-crafted fake
-``AgentState`` scenarios and prints each verbatim reply. Useful for
-verifying that the curator can in fact return non-None text on traces
-that clearly contain something worth memorising -- and that ``None``
-shows up on the dedup case.
+Runs the WP1.6 ReasoningBank pipeline against a handful of hand-crafted
+fake ``AgentState`` scenarios and prints the resulting :class:`MemoryEntry`
+(or ``None`` when the extractor parsed zero items). Useful for
+verifying that the judge correctly labels successes and failures and
+that the extractor produces well-formed markdown blocks against
+local Qwen and remote Mistral.
 
 The script writes every store into a fresh :class:`tempfile.TemporaryDirectory`
 so the user's real ``data/memories/`` is untouched. Exit code is ``0``
-when at least one scenario produced a memory, ``1`` when every scenario
-returned ``None`` (likely indicates a broken prompt).
+when at least one scenario produced a memory entry, ``1`` when every
+scenario returned ``None`` (likely indicates a broken prompt or
+parser).
 
 Usage:
     python scripts/memories/memory_creation.py
@@ -57,7 +59,7 @@ def _make_state(
     return state
 
 
-def _scenario_stuck_parse_failure() -> tuple[str, AgentState, list[str]]:
+def _scenario_stuck_parse_failure() -> tuple[str, AgentState]:
     """The model emits a two-line ``type ... \\n enter`` reply five times."""
     bad_reply = 'type [e34] "paper"\nenter'
     history: list[dict[str, Any]] = [
@@ -83,10 +85,10 @@ def _scenario_stuck_parse_failure() -> tuple[str, AgentState, list[str]]:
         history=history,
         steps=5,
     )
-    return "stuck_parse_failure", state, []
+    return "stuck_parse_failure", state
 
 
-def _scenario_stuck_repeated_click() -> tuple[str, AgentState, list[str]]:
+def _scenario_stuck_repeated_click() -> tuple[str, AgentState]:
     """The model fires the same valid click five times on an unchanging page."""
     history: list[dict[str, Any]] = [
         {
@@ -111,10 +113,10 @@ def _scenario_stuck_repeated_click() -> tuple[str, AgentState, list[str]]:
         history=history,
         steps=5,
     )
-    return "stuck_repeated_click", state, []
+    return "stuck_repeated_click", state
 
 
-def _scenario_successful_search() -> tuple[str, AgentState, list[str]]:
+def _scenario_successful_search() -> tuple[str, AgentState]:
     """Clean three-step Amazon search that ends with ``stop``."""
     history: list[dict[str, Any]] = [
         {
@@ -148,31 +150,13 @@ def _scenario_successful_search() -> tuple[str, AgentState, list[str]]:
         history=history,
         steps=3,
     )
-    return "successful_search", state, []
-
-
-def _scenario_dedup_with_existing_memory() -> tuple[str, AgentState, list[str]]:
-    """Same successful search, but a near-identical memory already exists.
-
-    A well-behaved curator should look at the top-5 most similar
-    existing memories and return ``None`` because nothing new is worth
-    storing.
-    """
-    _, state, _ = _scenario_successful_search()
-    seeds = [
-        (
-            "On Amazon, after typing a query into the search box and pressing "
-            "Enter the page navigates to /s?k=<query> with the results."
-        ),
-    ]
-    return "dedup_with_existing_memory", state, seeds
+    return "successful_search", state
 
 
 SCENARIOS = [
     _scenario_stuck_parse_failure,
     _scenario_stuck_repeated_click,
     _scenario_successful_search,
-    _scenario_dedup_with_existing_memory,
 ]
 
 
@@ -189,47 +173,49 @@ def main(argv: list[str] | None = None) -> int:
 
     with tempfile.TemporaryDirectory() as tmpdir:
         for scenario_fn in SCENARIOS:
-            name, state, seeds = scenario_fn()
+            name, state = scenario_fn()
             store = MemoryStore(
                 path=Path(tmpdir) / f"{name}.jsonl",
                 user_id="smoke_test",
                 embedder=embedder,
             )
-            if seeds:
-                store.add_many(seeds)
 
             print(f"\n=== {name} ===", flush=True)
             print(f"  aim: {state['aim']}", flush=True)
             print(f"  steps: {state['step']}, done: {state['done']}", flush=True)
-            print(f"  seeded memories: {len(seeds)}", flush=True)
 
             pipeline = MemoryPipeline(client=client, store=store)
-            memory = pipeline.create_from_run(state)
-            if memory is None:
-                print("  curator -> None (no memory created)", flush=True)
+            entry = pipeline.create_from_run(state, final_state="")
+            if entry is None:
+                print("  pipeline -> None (0 items parsed)", flush=True)
                 results.append((name, None))
             else:
-                print(f"  curator -> {memory.text!r}", flush=True)
-                results.append((name, memory.text))
+                print(
+                    f"  pipeline -> outcome={entry.outcome} items={len(entry.items)}",
+                    flush=True,
+                )
+                for i, item in enumerate(entry.items, start=1):
+                    print(f"    item {i}: {item.title!r} -> {item.content!r}", flush=True)
+                results.append((name, entry.outcome))
 
-    none_count = sum(1 for _, text in results if text is None)
-    text_count = len(results) - none_count
+    none_count = sum(1 for _, outcome in results if outcome is None)
+    ok_count = len(results) - none_count
 
     print("\n--- Summary ---", flush=True)
-    for name, text in results:
-        marker = "None" if text is None else "OK  "
-        rendered = "None" if text is None else repr(text)
+    for name, outcome in results:
+        marker = "None" if outcome is None else "OK  "
+        rendered = "None" if outcome is None else outcome
         print(f"  [{marker}] {name}: {rendered}", flush=True)
     print(
-        f"\n{text_count}/{len(results)} scenarios yielded a memory; "
+        f"\n{ok_count}/{len(results)} scenarios yielded a memory entry; "
         f"{none_count} returned None.",
         flush=True,
     )
 
-    if text_count == 0:
+    if ok_count == 0:
         print(
-            "\n[WARNING] Curator returned None for every scenario. "
-            "The system or user prompt is likely biasing the LLM toward 'None'.",
+            "\n[WARNING] Pipeline returned None for every scenario. "
+            "The judge or extractor prompt is likely producing unparseable output.",
             flush=True,
         )
         return 1

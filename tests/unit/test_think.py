@@ -28,7 +28,14 @@ class _FakeClient:
         self._replies = list(replies)
         self.calls: list[dict[str, str]] = []
 
-    def chat(self, system: str, user: str, *, temperature: float = 0.0) -> str:
+    def chat(
+        self,
+        system: str,
+        user: str,
+        *,
+        temperature: float = 0.0,
+        max_tokens: int | None = None,
+    ) -> str:
         self.calls.append({"system": system, "user": user})
         return self._replies.pop(0)
 
@@ -227,30 +234,40 @@ def test_parse_failure_outcome_has_no_hint_appended() -> None:
 
 
 @pytest.mark.unit
-def test_retrieved_memories_appear_in_user_prompt() -> None:
-    """WP1.5: ``state['memories']`` must be spliced into the Think prompt.
+def test_retrieved_memories_appear_in_user_prompt_with_paper_instruction() -> None:
+    """WP1.6: each memory is rendered as ``Title:`` / ``Content:`` under the paper's instruction.
 
-    The memories list is populated once at run start by the WP1.5 runner
-    (top-k matches for the aim). The Think node treats it as opaque
-    text and renders it as a numbered block between the aim and the
-    history. An empty list must produce no memory block at all so the
-    WP1.3/1.4 prompts stay byte-identical when no retrieval ran.
+    The memories list is populated once at run start by the WP1.5/1.6
+    runner (top-k matches for the aim, flattened from
+    :class:`MemoryEntry.items`). The Think node renders each item as a
+    ``Title: ...\\nContent: ...`` block prefaced by the paper's exact
+    instruction from Appendix A.2.
     """
+    from agent_memories.agent.nodes import MEMORY_INJECTION_INSTRUCTION
+
     client = _FakeClient(["click [e1]"])
     state = _seed_state()
     state["memories"] = [
-        "Dismiss the cookie banner before searching.",
-        "Use Enter to submit the search box.",
+        {
+            "title": "Dismiss cookie banners early",
+            "content": "Dismiss the cookie banner before searching.",
+        },
+        {
+            "title": "Use Enter to submit",
+            "content": "Use Enter to submit the search box.",
+        },
     ]
 
     make_think(client)(state)
 
     user_prompt = client.calls[0]["user"]
-    assert "Relevant prior memories:" in user_prompt
-    assert "1. Dismiss the cookie banner before searching." in user_prompt
-    assert "2. Use Enter to submit the search box." in user_prompt
+    assert MEMORY_INJECTION_INSTRUCTION in user_prompt
+    assert "Title: Dismiss cookie banners early" in user_prompt
+    assert "Content: Dismiss the cookie banner before searching." in user_prompt
+    assert "Title: Use Enter to submit" in user_prompt
+    assert "Content: Use Enter to submit the search box." in user_prompt
     aim_index = user_prompt.index("Aim: Click Go")
-    memories_index = user_prompt.index("Relevant prior memories:")
+    memories_index = user_prompt.index(MEMORY_INJECTION_INSTRUCTION)
     history_index = user_prompt.index("History (most recent last):")
     assert aim_index < memories_index < history_index
 
@@ -258,6 +275,8 @@ def test_retrieved_memories_appear_in_user_prompt() -> None:
 @pytest.mark.unit
 def test_empty_memories_list_omits_memory_block() -> None:
     """An empty ``state['memories']`` must not introduce any memory header."""
+    from agent_memories.agent.nodes import MEMORY_INJECTION_INSTRUCTION
+
     client = _FakeClient(["click [e1]"])
     state = _seed_state()
     state["memories"] = []
@@ -265,7 +284,45 @@ def test_empty_memories_list_omits_memory_block() -> None:
     make_think(client)(state)
 
     user_prompt = client.calls[0]["user"]
-    assert "Relevant prior memories:" not in user_prompt
+    assert MEMORY_INJECTION_INSTRUCTION not in user_prompt
+
+
+@pytest.mark.unit
+def test_memory_injection_instruction_is_paper_verbatim() -> None:
+    """The injected instruction must match ReasoningBank Appendix A.2 verbatim.
+
+    The paper's exact phrasing is the contract: any drift would make
+    the WP1.6 reproduction less comparable to published numbers.
+    """
+    from agent_memories.agent.nodes import MEMORY_INJECTION_INSTRUCTION
+
+    expected = (
+        "Below are some memory items that I accumulated from past interaction "
+        "from the environment that may be helpful to solve the task. You can "
+        "use it when you feel it's relevant. In each step, please first "
+        "explicitly discuss if you want to use each memory item or not, and "
+        "then take action."
+    )
+    assert MEMORY_INJECTION_INSTRUCTION == expected
+
+
+@pytest.mark.unit
+def test_memory_description_field_is_not_shown_to_think() -> None:
+    """The paper says items are rendered with title + content; description is for audit only."""
+    client = _FakeClient(["click [e1]"])
+    state = _seed_state()
+    state["memories"] = [
+        {
+            "title": "Use the labelled search input",
+            "content": "Find the main search box by its accessible label.",
+        },
+    ]
+
+    make_think(client)(state)
+
+    user_prompt = client.calls[0]["user"]
+    # Description is intentionally absent: the Think prompt must not carry it.
+    assert "Description:" not in user_prompt
 
 
 @pytest.mark.unit

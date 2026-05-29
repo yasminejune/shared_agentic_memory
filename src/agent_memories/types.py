@@ -14,7 +14,17 @@ class ChatClient(Protocol):
     """Structural type for any object that can complete a chat turn.
 
     ``MistralClient`` and ``OllamaClient`` satisfy this, and so does
-    any test double exposing a matching ``chat`` method.
+    any test double exposing a matching ``chat`` method. The optional
+    ``max_tokens`` override is used by the WP1.6 ReasoningBank
+    pipeline (judge ~256, extractor ~768) to bypass the 64-token cap
+    that the Think node relies on.
     """
 
-    def chat(self, system: str, user: str, *, temperature: float = ...) -> str: ...
+    def chat(
+        self,
+        system: str,
+        user: str,
+        *,
+        temperature: float = ...,
+        max_tokens: int | None = ...,
+    ) -> str: ...

@@ -54,13 +54,25 @@ class OllamaClient:
         self.num_predict = num_predict
         self._http = httpx.Client(timeout=request_timeout)
 
-    def chat(self, system: str, user: str, *, temperature: float = 0.0) -> str:
+    def chat(
+        self,
+        system: str,
+        user: str,
+        *,
+        temperature: float = 0.0,
+        max_tokens: int | None = None,
+    ) -> str:
         """Send a single system+user turn and return the assistant text.
+
+        ``max_tokens`` overrides the constructor's ``num_predict`` for
+        a single call; the Think node leaves it at ``None`` (64-token
+        cap), the WP1.6 pipeline raises it for the judge and extractor.
 
         Any ``httpx.HTTPStatusError`` (e.g. 404 for an unpulled model)
         or ``httpx.TimeoutException`` propagates so the Think node
         surfaces the failure rather than silently looping.
         """
+        num_predict = self.num_predict if max_tokens is None else max_tokens
         payload: dict[str, Any] = {
             "model": self.model,
             "messages": [
@@ -71,7 +83,7 @@ class OllamaClient:
             "stream": False,
             "options": {
                 "temperature": temperature,
-                "num_predict": self.num_predict,
+                "num_predict": num_predict,
             },
         }
         response = self._http.post(f"{self.base_url}/api/chat", json=payload)
