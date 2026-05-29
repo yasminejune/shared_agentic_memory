@@ -1,5 +1,0 @@
-[
-  "On Amazon, the main search input has aria-label 'Search Amazon' and submitting via Enter is reliable after typing the query.",
-  "On Amazon, blocking the EU cookie banner before searching avoids it intercepting the first click on a result tile.",
-  "When the desired item is not on the first results page, scrolling once is usually enough to surface a Sponsored vs Organic split that helps disambiguation."
-]

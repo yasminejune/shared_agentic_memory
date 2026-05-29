@@ -57,6 +57,20 @@ OBSERVATION_CHAR_BUDGET = 12_000
 # ``max_steps`` worth of identical wasted turns.
 DEFAULT_STUCK_THRESHOLD = 5
 
+# Memory-injection instruction, verbatim from ReasoningBank (Ouyang et al.
+# 2025, Appendix A.2 "Memory Retrieval and Response Generation"). This
+# string is what the paper expects the agent to see whenever
+# ReasoningBank surfaces memories for a task; the description field is
+# intentionally omitted from the rendered block because the paper says
+# items are "represented by their title and content".
+MEMORY_INJECTION_INSTRUCTION = (
+    "Below are some memory items that I accumulated from past interaction "
+    "from the environment that may be helpful to solve the task. You can "
+    "use it when you feel it's relevant. In each step, please first "
+    "explicitly discuss if you want to use each memory item or not, and "
+    "then take action."
+)
+
 
 def _trace(line: str) -> None:
     """Print a single trace line to stdout, flushed."""
@@ -265,7 +279,7 @@ def _build_user_prompt(state: AgentState) -> str:
     sections: list[str] = [f"Aim: {state['aim']}"]
     memories = state.get("memories", [])
     if memories:
-        sections.extend(["", "Relevant prior memories:", _format_memories(memories)])
+        sections.extend(["", MEMORY_INJECTION_INSTRUCTION, "", _format_memories(memories)])
     sections.extend(
         [
             "",
@@ -281,15 +295,22 @@ def _build_user_prompt(state: AgentState) -> str:
     return "\n".join(sections)
 
 
-def _format_memories(memories: list[str]) -> str:
-    """Render retrieved memories as a numbered block for the Think prompt.
+def _format_memories(memories: list[dict[str, str]]) -> str:
+    """Render retrieved ReasoningBank items as ``Title:``/``Content:`` blocks.
 
-    WP1.5 populates ``state['memories']`` once at run start with the top-k
-    matches for the aim (per the runner in :mod:`scripts.memories.WP1_5`).
-    The Think node treats the list as opaque: it is the runner's job to
-    decide what gets retrieved and how many.
+    Matches the paper's "represented by its title and content" rule
+    (Appendix A.2). The runner (:mod:`scripts.memories.WP1_5`) is
+    responsible for flattening :class:`MemoryEntry.items` into this
+    list of ``{"title", "content"}`` dicts before invoking the graph.
+    The ``description`` field is intentionally not shown to the Think
+    LLM -- it is an audit field, not a reasoning aid.
     """
-    return "\n".join(f"  {i + 1}. {m}" for i, m in enumerate(memories))
+    rendered: list[str] = []
+    for item in memories:
+        title = item.get("title", "").strip()
+        content = item.get("content", "").strip()
+        rendered.append(f"Title: {title}\nContent: {content}")
+    return "\n\n".join(rendered)
 
 
 def _truncate_observation(tree_yaml: str, budget: int) -> str:

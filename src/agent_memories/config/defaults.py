@@ -23,15 +23,3 @@ REPO_ROOT: Path = Path(__file__).resolve().parents[3]
 
 DEFAULT_USER_ID: str = os.getenv("AGENT_MEMORY_USER_ID", "user_a")
 DEFAULT_MEMORY_DIR: Path = REPO_ROOT / "data" / "memories"
-DEFAULT_SEED_DIR: Path = REPO_ROOT / "tests" / "data" / "memories"
-
-
-def default_seed_path(user_id: str) -> Path:
-    """Return the canonical seed-fixture path for ``user_id``.
-
-    By convention the fixture for ``user_a`` lives at
-    ``tests/data/memories/seed_user_a.json``. The path is returned
-    whether or not the file exists; callers decide what to do when it
-    does not.
-    """
-    return DEFAULT_SEED_DIR / f"seed_{user_id}.json"
