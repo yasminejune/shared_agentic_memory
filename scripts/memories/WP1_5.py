@@ -1,38 +1,45 @@
-"""Runnable entry point for the WP1.5 memory-augmented Observe-Think-Act loop.
+"""Runnable entry point for the WP1.6 memory-augmented Observe-Think-Act loop.
 
 Mirrors ``scripts/langgraph/WP1_3.py`` exactly except for three additions:
 
 1. **Per-user memory store on disk.** A JSONL file at
    ``data/memories/<user_id>.jsonl`` is loaded (or created lazily) on
-   startup.
-2. **Optional seed file.** ``--seed-memories <path>`` reads a JSON list
-   of strings and appends them to the user's store before the run, so
-   the "manually seeded memories" controlled-task test from tasks.md
-   reduces to a single command-line invocation.
-3. **Memory injection + creation.** The top-``k`` memories most similar
-   to the aim are read once into ``state['memories']`` before
-   ``graph.invoke``; after the run completes, the curator LLM is asked
-   whether the trajectory is worth distilling into a new memory.
+   startup, in the WP1.6 ReasoningBank schema (one entry per task
+   query, items hanging off).
+2. **Memory injection.** The top-``k`` entries most similar to the aim
+   are read into ``state['memories']`` (flattened to one
+   ``{"title", "content"}`` dict per item) before ``graph.invoke``.
+   On a fresh store this is the empty list; the agent runs without
+   memories until it has accumulated some of its own.
+3. **WP1.6 ReasoningBank memory creation.** After the loop completes,
+   :class:`MemoryPipeline` runs the LLM-as-Judge + outcome-routed
+   distillation pipeline. The final observation's ARIA YAML is passed
+   in as the ``final_state`` argument so the judge prompt sees the
+   page the agent left behind.
 
 The script returns the final :class:`AgentState` so a higher-level
-WP1.6 / WP2 driver can consume ``state['history']`` and the updated
-store directly.
+WP2 driver can consume ``state['history']`` and the updated store
+directly.
 """
 
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
 
 from dotenv import load_dotenv
 from playwright.sync_api import sync_playwright
 
 from agent_memories.agent import build_graph, new_state
-from agent_memories.agent.nodes import DEFAULT_STUCK_THRESHOLD, make_think
+from agent_memories.agent.nodes import (
+    DEFAULT_STUCK_THRESHOLD,
+    OBSERVATION_CHAR_BUDGET,
+    make_think,
+)
 from agent_memories.agent.state import AgentState
-from agent_memories.config import DEFAULT_MEMORY_DIR, DEFAULT_USER_ID, default_seed_path
+from agent_memories.config import DEFAULT_MEMORY_DIR, DEFAULT_USER_ID
 from agent_memories.memory import Embedder, MemoryPipeline, MemoryStore
+from agent_memories.memory.store import MemoryEntry
 from agent_memories.services.mistral_client import MistralClient
 from agent_memories.services.ollama_client import OllamaClient
 from agent_memories.types import ChatClient
@@ -52,44 +59,32 @@ def _build_client(name: str) -> ChatClient:
     return MistralClient(model=MISTRAL_MODEL)
 
 
-def _load_seed_memories(path: Path) -> list[str]:
-    """Read a JSON file of seed memories.
+def _flatten_entries_for_think(entries: list[MemoryEntry]) -> list[dict[str, str]]:
+    """Render retrieved entries as the flat ``{title, content}`` list Think expects.
 
-    Accepted shapes:
-
-    * ``["memory text", ...]`` -- a plain list of strings.
-    * ``[{"text": "memory text"}, ...]`` -- a list of objects with a
-      ``text`` field; other fields are ignored (forward-compat with
-      WP1.6's richer schema).
+    With the default ``k=1`` this yields 1-3 items (one trajectory's
+    worth of distilled lessons). The ``description`` field is dropped
+    because the paper renders items in the agent prompt with title
+    and content only (Appendix A.2).
     """
-    raw = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(raw, list):
-        raise ValueError(f"Seed file {path} must contain a JSON list, got {type(raw).__name__}")
-    texts: list[str] = []
-    for entry in raw:
-        if isinstance(entry, str):
-            texts.append(entry)
-        elif isinstance(entry, dict) and "text" in entry:
-            texts.append(str(entry["text"]))
-        else:
-            raise ValueError(
-                f"Seed file {path} entries must be strings or objects with 'text'; got {entry!r}"
-            )
-    return texts
+    flat: list[dict[str, str]] = []
+    for entry in entries:
+        for item in entry.items:
+            flat.append({"title": item.title, "content": item.content})
+    return flat
 
 
-def _seed_store_if_empty(store: MemoryStore, seed_path: Path | None) -> int:
-    """Seed an empty store from ``seed_path``; return the number seeded.
+def _truncate_observation(tree_yaml: str, budget: int) -> str:
+    """Cap ``tree_yaml`` to ``budget`` characters with a visible marker.
 
-    Re-running the script with the same ``--seed-memories`` file should
-    not double-seed, so seeding is skipped when the store is already
-    non-empty. Delete the JSONL file to re-seed from scratch.
+    Mirrors ``nodes._truncate_observation`` so the judge prompt sees
+    the same shape of final state that Think saw during the run.
     """
-    if seed_path is None or len(store) > 0:
-        return 0
-    texts = _load_seed_memories(seed_path)
-    store.add_many(texts)
-    return len(texts)
+    if budget <= 0 or len(tree_yaml) <= budget:
+        return tree_yaml
+    marker = "\n# ... <observation truncated to fit context window> ..."
+    head = tree_yaml[: max(0, budget - len(marker))]
+    return head + marker
 
 
 def main(argv: list[str] | None = None) -> AgentState:
@@ -102,16 +97,10 @@ def main(argv: list[str] | None = None) -> AgentState:
     parser.add_argument("--headless", action="store_true")
     parser.add_argument("--user-id", default=DEFAULT_USER_ID)
     parser.add_argument(
-        "--seed-memories",
-        type=Path,
-        default=None,
-        help="Optional JSON file of seed memories to load into an empty store.",
-    )
-    parser.add_argument(
         "--k",
         type=int,
         default=DEFAULT_K,
-        help="How many memories to inject into the Think prompt (default: 1).",
+        help="How many memory entries to inject into the Think prompt (default: 1).",
     )
     parser.add_argument(
         "--memory-dir",
@@ -135,27 +124,14 @@ def main(argv: list[str] | None = None) -> AgentState:
     embedder = Embedder()
     store_path = args.memory_dir / f"{args.user_id}.jsonl"
     store = MemoryStore.load(store_path, user_id=args.user_id, embedder=embedder)
-    print(f"[Memory] Store at {store_path} has {len(store)} memories.", flush=True)
-
-    # Fall back to the canonical seed fixture for this user when the caller did
-    # not pass --seed-memories. Keeps "first run" reproducible without
-    # requiring the flag on every invocation; idempotent on subsequent runs
-    # because _seed_store_if_empty no-ops once the store is populated.
-    seed_path = args.seed_memories
-    if seed_path is None:
-        candidate = default_seed_path(args.user_id)
-        if candidate.exists():
-            seed_path = candidate
-
-    seeded = _seed_store_if_empty(store, seed_path)
-    if seeded:
-        print(f"[Memory] Seeded {seeded} memories into {store_path}", flush=True)
+    print(f"[Memory] Store at {store_path} has {len(store)} entries.", flush=True)
 
     retrieved = store.search(args.aim, k=args.k)
+    flat_memories = _flatten_entries_for_think(retrieved)
     state = new_state(aim=args.aim)
-    state["memories"] = [m.text for m in retrieved]
+    state["memories"] = flat_memories
     print(
-        f"[Memory] Retrieved {len(retrieved)} memories for aim "
+        f"[Memory] Retrieved {len(retrieved)} entries ({len(flat_memories)} item(s)) for aim "
         f"(user_id={args.user_id}, k={args.k})",
         flush=True,
     )
@@ -176,12 +152,20 @@ def main(argv: list[str] | None = None) -> AgentState:
         finally:
             browser.close()
 
+    final_state_yaml = _truncate_observation(
+        result.get("observation", {}).get("tree_yaml", ""),
+        OBSERVATION_CHAR_BUDGET,
+    )
     pipeline = MemoryPipeline(client=client, store=store)
-    created = pipeline.create_from_run(result)
+    created = pipeline.create_from_run(result, final_state=final_state_yaml)
     if created is None:
-        print("[Memory] No new memory created (curator returned 'None').", flush=True)
+        print("[Memory] No new memory created (0 items parsed from extractor).", flush=True)
     else:
-        print(f"[Memory] Created new memory: {created.text!r}", flush=True)
+        print(
+            f"[Memory] Created entry for query={created.query!r} "
+            f"outcome={created.outcome} items={len(created.items)}",
+            flush=True,
+        )
 
     return result
 

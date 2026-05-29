@@ -2,8 +2,8 @@
 
 A scratch-reset helper for the WP1.5 memory store. The runner
 (``scripts/memories/WP1_5.py``) will recreate the file on its next
-seeded run, so wiping the directory is enough -- there is no schema
-or index to keep in sync.
+run, so wiping the directory is enough -- there is no schema or
+index to keep in sync.
 
 Usage:
     python scripts/memories/clear_memories.py
