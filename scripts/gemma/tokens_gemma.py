@@ -19,10 +19,15 @@ model = AutoModelForCausalLM.from_pretrained(
 model.eval()
 
 prompt = "Generate text similar to: The approval threshold is £400."
-inputs = tokenizer(prompt, return_tensors="pt")
+input_ids = tokenizer.apply_chat_template(
+    [{"role": "user", "content": prompt}],
+    add_generation_prompt=True,
+    tokenize=True,
+    return_tensors="pt",
+)
 
 with torch.no_grad():
-    outputs = model(**inputs)
+    outputs = model(input_ids=input_ids)
 
 # This is what Algorithm 1 needs — raw logit vector over vocabulary
 logits = outputs.logits  # shape: [batch, seq_len, vocab_size]
