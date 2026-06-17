@@ -2,8 +2,10 @@
 
 Reads 10 toy examples from ``scripts/amin_et_al/examples.csv`` and
 calls :func:`agent_memories.agent.privacy.generate` once to produce a
-single differentially-private synthetic sentence at
-``(epsilon=10, delta=1e-5)``. Prints the resulting text and the
+single differentially-private synthetic sentence at the script's
+``EPSILON`` constant and ``delta = 1 / n`` (the Amin et al. 2024
+Appendix C convention; with ``n = 10`` toy examples this is
+``delta = 0.1``). Prints the resulting text and the
 privacy account. Prompt wrapping is handled inside ``generate`` via
 :data:`agent_memories.agent.privacy.prompts.GENERIC_PROMPT`; this
 script pre-renders each CSV row as a one-line memory-items block

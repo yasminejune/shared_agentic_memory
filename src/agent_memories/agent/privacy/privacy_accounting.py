@@ -78,7 +78,9 @@ def rho_for(r: int, s: int, c: float, tau: float, sigma: float) -> float:
     return r * (exp_mech_term + svt_term)
 
 
-def get_epsilon(r, s, c, tau, sigma) -> float:
+def get_epsilon(
+    r: int, s: int, c: float, tau: float, sigma: float
+) -> tuple[float, float]:
     rho = rho_for(r, s, c, tau, sigma)
 
     delta = 1 / s
@@ -225,7 +227,7 @@ def check_delta(rho: float, epsilon: float, delta: float, n: int) -> DeltaCheck:
 
 if __name__ == "__main__":
     s, c, tau, sigma = 10, 10.0, 1.5, 1.0
-    delta = 1e-5
+    delta = 1.0 / s
     n = 10
     print(
         f"Amin et al. Theorem 1 sanity table  (s={s}, c={c}, "

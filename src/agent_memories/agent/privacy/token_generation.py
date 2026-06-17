@@ -9,7 +9,12 @@ next-token logit matrix for a list of prompts either from raw strings
 (:func:`get_next_token_logits_from_ids` — saves the per-iteration
 re-tokenisation cost when the same wrapped prompt is reused across
 many sampling steps), and read the relevant stop-token ids
-(:func:`eos_id`, :func:`stop_ids`).
+(:func:`eos_id`, :func:`stop_ids`). For the production WP2 sampling
+loop the cached pair :func:`prefill_padded` plus :func:`continue_batched`
+fold the ``s + 1`` per-token forwards (one per sensitive prompt plus
+one public prompt) into one padded batched prefill followed by one
+``(B, 1)`` continuation per token, reusing the prompt-prefix
+``past_key_values`` rather than re-attending to the prefix every step.
 
 The model is loaded lazily on the first call so that simply importing
 the package (e.g. from a test or another script) does not download or
@@ -18,7 +23,13 @@ load Gemma. The default model name is ``google/gemma-2-2b-it`` per
 Amin et al. 2024 (who used Gemma 1.1 2B IT, paper §5); we pick the
 current Gemma 2 generation because the algorithm and privacy proof
 are model-agnostic and the 2B-IT architecture is unchanged. The
-project standard is IT + chat-template prompting via
+model is loaded in ``torch.bfloat16`` — its training dtype — which
+preserves the fp32 dynamic range that Gemma 2's attention logit
+soft-capping needs (fp16 produces silent NaN / Inf there) and roughly
+halves the per-forward-pass cost on MPS versus fp32. All logits are
+cast back to ``float32`` before they leave this module so downstream
+sampling code in :mod:`.privatisation` is insulated from the inference
+dtype. The project standard is IT + chat-template prompting via
 :func:`encode_chat` and is used by the production
 :mod:`agent_memories.agent.privacy.privatisation` path and every
 sibling script. The default can be overridden via :func:`set_model`
@@ -30,6 +41,8 @@ point that loads the raw-completion base ``google/gemma-2-2b``.
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
+from typing import Any
 
 import torch
 from dotenv import load_dotenv
@@ -38,8 +51,8 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 MODEL_NAME = "google/gemma-2-2b-it"
 
-_tokenizer = None
-_model = None
+_tokenizer: Any = None
+_model: Any = None
 
 
 def _load() -> None:
@@ -53,7 +66,8 @@ def _load() -> None:
     _tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
     if _tokenizer.pad_token_id is None:
         _tokenizer.pad_token = _tokenizer.eos_token
-    _model = AutoModelForCausalLM.from_pretrained(MODEL_NAME, dtype=torch.float32).to("mps")
+    model_obj: Any = AutoModelForCausalLM.from_pretrained(MODEL_NAME, dtype=torch.bfloat16)
+    _model = model_obj.to("mps")
     _model.eval()
 
 
@@ -77,7 +91,8 @@ def set_model(name: str) -> None:
 def encode(text: str) -> list[int]:
     """Tokenise ``text`` into a flat list of token ids."""
     _load()
-    return _tokenizer(text, return_tensors=None, add_special_tokens=True)["input_ids"]
+    ids: list[int] = _tokenizer(text, return_tensors=None, add_special_tokens=True)["input_ids"]
+    return ids
 
 
 def encode_chat(prompt: str) -> list[int]:
@@ -95,24 +110,26 @@ def encode_chat(prompt: str) -> list[int]:
     being buried inside the user turn.
     """
     _load()
-    return _tokenizer.apply_chat_template(
+    ids: list[int] = _tokenizer.apply_chat_template(
         [{"role": "user", "content": prompt}],
         add_generation_prompt=True,
         tokenize=True,
         return_tensors=None,
     )
+    return ids
 
 
 def decode(ids: list[int]) -> str:
     """Detokenise a list of token ids back into a string."""
     _load()
-    return _tokenizer.decode(ids, skip_special_tokens=True)
+    text: str = _tokenizer.decode(ids, skip_special_tokens=True)
+    return text
 
 
 def eos_id() -> int:
     """Return the end-of-sequence token id for the model."""
     _load()
-    return _tokenizer.eos_token_id
+    return int(_tokenizer.eos_token_id)
 
 
 def stop_ids() -> set[int]:
@@ -175,6 +192,30 @@ def get_next_token_logits(prompts: list[str]) -> torch.Tensor:
     return torch.stack(rows, dim=0)
 
 
+def _pad_left(prompt_ids: list[list[int]], pad_id: int) -> tuple[torch.Tensor, torch.Tensor]:
+    """Left-pad variable-length id lists to one ``(B, T)`` tensor with mask.
+
+    Left-padding is used so the last position of every padded row is
+    that row's last real token; the next-token logit can then be read
+    as ``logits[:, -1, :]`` without per-row indexing, and a single
+    new token can be appended on the right during a cache continuation
+    without disturbing the per-row alignment. ``pad_id`` is the id
+    written into the padded slots; the returned ``attention_mask``
+    (1 for real tokens, 0 for pads) is the source of truth the model
+    uses to ignore them, so the literal id value is structurally
+    irrelevant as long as the mask is honoured.
+    """
+    max_len = max(len(ids) for ids in prompt_ids)
+    batch_size = len(prompt_ids)
+    input_ids = torch.full((batch_size, max_len), pad_id, dtype=torch.long)
+    attention_mask = torch.zeros((batch_size, max_len), dtype=torch.long)
+    for i, ids in enumerate(prompt_ids):
+        n = len(ids)
+        input_ids[i, max_len - n :] = torch.tensor(ids, dtype=torch.long)
+        attention_mask[i, max_len - n :] = 1
+    return input_ids, attention_mask
+
+
 def get_next_token_logits_from_ids(prompt_ids: list[list[int]]) -> torch.Tensor:
     """Stacked next-token logits given pre-tokenised prompt id lists.
 
@@ -185,15 +226,120 @@ def get_next_token_logits_from_ids(prompt_ids: list[list[int]]) -> torch.Tensor:
     re-tokenisation that the string-based path pays. Shape of the
     returned tensor is ``(len(prompt_ids), vocab_size)``, matching
     :func:`get_next_token_logits`.
+
+    Internally the rows are left-padded to a common length via
+    :func:`_pad_left` and run through the model in a single batched
+    forward pass with an explicit attention mask: causal self-attention
+    does not cross between rows and the mask blocks attention to the
+    pads, so the result is mathematically identical to the prior
+    one-forward-pass-per-prompt loop but pays only one kernel-launch
+    overhead per call. Returned logits are cast to ``float32`` so
+    downstream sampling code is insulated from the model's bf16
+    inference dtype.
     """
     _load()
-    rows: list[torch.Tensor] = []
-    for ids in prompt_ids:
-        input_ids = torch.tensor([ids], dtype=torch.long).to("mps")
-        with torch.no_grad():
-            outputs = _model(input_ids=input_ids)
-        rows.append(outputs.logits[0, -1, :])
-    return torch.stack(rows, dim=0)
+    pad_id = int(_tokenizer.pad_token_id)
+    input_ids, attention_mask = _pad_left(prompt_ids, pad_id)
+    input_ids = input_ids.to("mps")
+    attention_mask = attention_mask.to("mps")
+    with torch.no_grad():
+        outputs = _model(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            use_cache=False,
+        )
+    logits: torch.Tensor = outputs.logits[:, -1, :].float()
+    return logits
+
+
+@dataclass
+class PrefillState:
+    """Opaque KV-cache state returned by :func:`prefill_padded`.
+
+    Holds the HuggingFace ``past_key_values`` cache and the running
+    ``attention_mask`` so :func:`continue_batched` can extend both by
+    one position per call. Treat as opaque from outside the module —
+    the only valid operation is to thread the returned instance back
+    into :func:`continue_batched`.
+    """
+
+    past_key_values: Any
+    attention_mask: torch.Tensor
+
+
+def prefill_padded(
+    prompt_ids: list[list[int]],
+) -> tuple[torch.Tensor, PrefillState]:
+    """Padded batched prefill: one forward pass over all prompts, cache K/V.
+
+    Pads ``prompt_ids`` to a common length via :func:`_pad_left`, runs
+    the full model forward once with ``use_cache=True``, and returns
+    the per-row next-token logits together with a :class:`PrefillState`
+    that the caller can thread into :func:`continue_batched` so the
+    prompt prefix is never re-attended-to in subsequent sampling
+    steps. Used by the production WP2 path
+    (:func:`agent_memories.agent.privacy.privatisation.generate`),
+    which stacks the ``s`` sensitive prompts together with the
+    single public prompt into one ``s + 1`` batch so the whole
+    sampling loop runs as one prefill plus one tiny per-token
+    continuation rather than ``s + 1`` independent full-prompt
+    forwards per token.
+    """
+    _load()
+    pad_id = int(_tokenizer.pad_token_id)
+    input_ids, attention_mask = _pad_left(prompt_ids, pad_id)
+    input_ids = input_ids.to("mps")
+    attention_mask = attention_mask.to("mps")
+    with torch.no_grad():
+        outputs = _model(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            use_cache=True,
+        )
+    logits = outputs.logits[:, -1, :].float()
+    return logits, PrefillState(
+        past_key_values=outputs.past_key_values,
+        attention_mask=attention_mask,
+    )
+
+
+def continue_batched(
+    state: PrefillState,
+    new_token_ids: list[int],
+) -> tuple[torch.Tensor, PrefillState]:
+    """One-token continuation using cached K/V; returns updated logits and state.
+
+    ``new_token_ids[i]`` is the next token to append to row ``i``.
+    The model sees only ``(B, 1)`` of fresh input ids per call;
+    every position from the prefill (and from previous continuations)
+    is re-used from ``state.past_key_values`` without re-attention.
+    The running ``attention_mask`` is extended by one column of ones
+    so HuggingFace's combined past + new mask shape
+    ``(B, past_len + 1)`` stays consistent. Returns the per-row
+    next-token logits (cast to ``float32``) and a fresh
+    :class:`PrefillState` carrying the now-longer cache.
+    """
+    _load()
+    batch_size = len(new_token_ids)
+    input_ids = torch.tensor(new_token_ids, dtype=torch.long).unsqueeze(-1).to("mps")
+    new_mask_col = torch.ones(
+        (batch_size, 1),
+        dtype=state.attention_mask.dtype,
+        device=state.attention_mask.device,
+    )
+    attention_mask = torch.cat([state.attention_mask, new_mask_col], dim=1)
+    with torch.no_grad():
+        outputs = _model(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            past_key_values=state.past_key_values,
+            use_cache=True,
+        )
+    logits = outputs.logits[:, -1, :].float()
+    return logits, PrefillState(
+        past_key_values=outputs.past_key_values,
+        attention_mask=attention_mask,
+    )
 
 
 def softmax(logits: torch.Tensor) -> torch.Tensor:

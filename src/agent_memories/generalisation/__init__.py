@@ -14,6 +14,21 @@ itself DP-released at the same level, so this call contributes zero
 to the privacy account (see WP2-plan §4.7).
 """
 
+from .assignment import LabelAssignment, assign_memories_to_labels, group_by_label
+from .buffer import GatingResult, read_buffer, select_round2_inputs, write_buffer
+from .labelling import parse_json_labels, parse_numbered_labels
 from .post_processing import save_intermediate, title_and_description
 
-__all__ = ["title_and_description", "save_intermediate"]
+__all__ = [
+    "GatingResult",
+    "LabelAssignment",
+    "assign_memories_to_labels",
+    "group_by_label",
+    "parse_json_labels",
+    "parse_numbered_labels",
+    "read_buffer",
+    "save_intermediate",
+    "select_round2_inputs",
+    "title_and_description",
+    "write_buffer",
+]
