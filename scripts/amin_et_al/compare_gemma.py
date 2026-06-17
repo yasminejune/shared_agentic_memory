@@ -42,7 +42,7 @@ from agent_memories.agent.privacy import token_generation as tg
 from agent_memories.agent.privacy.privatisation import clip_recenter
 from agent_memories.agent.privacy.prompts import wrap
 
-C = 10.0  # logit clip bound, matches simplified_amin.py / WP2_3.py
+C = 20.0  # logit clip bound, matches simplified_amin.py / WP2_3.py
 MAX_TOTAL_TOKENS = 80  # matches simplified_amin.py / WP2_3.py R_MAX
 LABEL = "attending a recent event"  # same manual-in as simplified_amin.py
 

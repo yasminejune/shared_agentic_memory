@@ -8,29 +8,41 @@ sequence ``x`` under (epsilon, delta) differential privacy governed
 by the Theorem 1 bound, returning the decoded string and a
 :class:`PrivacyAccount` record.
 
-Both the sensitive prompts and the public prompt are built from the
-single :data:`agent_memories.agent.privacy.prompts.GENERIC_PROMPT`
-template via :func:`agent_memories.agent.privacy.prompts.wrap`, then
-tokenised once via :func:`token_generation.encode_chat` so each
-prompt is wrapped in the Gemma 2 IT chat template (the model is
-loaded as ``google/gemma-2-2b-it`` per WP2-plan §5; instruction-tuned
-+ chat template is the project standard, see WP2-plan §5 and §11
-deviation 8). The per-step loop appends the running token ids
-``x_ids`` directly to each pre-tokenised prompt and feeds the
-concatenation to :func:`token_generation.get_next_token_logits_from_ids`,
-so the unchanging prompt prefix is never re-tokenised and the
-running suffix is never decoded then re-encoded. Callers pass
-pre-rendered memory-items blocks (one per batch member) and the
-round-1 DP-released label string; the public prompt is the same
-template with the items block replaced by the literal
-``"(no examples)"`` (WP2-plan §3.4) and the same label in the same
-position, which is public input to this round by post-processing and
-incurs no additional privacy cost.
+Both the sensitive prompts and the public prompt are built from a
+template in :mod:`agent_memories.agent.privacy.prompts` via a
+wrapping function supplied by the caller (``wrap_fn``; defaults to
+the round-2 :func:`prompts.wrap` so existing round-2 call sites
+continue to work unchanged, but the round-1 caller in
+``scripts/amin_et_al/WP2_8.py`` passes :func:`prompts.wrap_label`
+instead). Any additional keyword arguments accepted by the chosen
+``wrap_fn`` (``label=...`` for round 2, ``k=...`` for round 1) are
+forwarded transparently via ``**wrap_kwargs``. Each wrapped prompt
+is then tokenised once via :func:`token_generation.encode_chat` so
+the Gemma 2 IT chat template is applied (the model is loaded as
+``google/gemma-2-2b-it`` per WP2-plan §5; instruction-tuned + chat
+template is the project standard, see WP2-plan §5 and §11
+deviation 8). The ``s`` sensitive prompts and the single public
+prompt are stacked into one ``s + 1`` batch and run through one
+padded batched prefill via :func:`token_generation.prefill_padded`,
+which both tokenises and forward-passes them together and returns a
+:class:`token_generation.PrefillState` carrying the shared KV cache.
+Each subsequent sampling step then issues a single ``(B, 1)``
+continuation via :func:`token_generation.continue_batched` rather
+than re-running the full prompt through every transformer layer: the
+prompt prefix is neither re-tokenised nor re-attended-to. The public
+prompt is built by calling the same ``wrap_fn`` with no ``items``
+argument, so the items block defaults to the literal
+``"(no examples)"`` (WP2-plan §3.4) and the rest of the template
+aligns token-for-token with the private branch, ensuring only
+content tokens consume privacy budget.
 
 Steps per iteration (paper Algorithm 1 lines 9 to 22):
 
-1. Build the logit batch ``Z = {logits(p . x) : p in S}`` and the
-   public logits ``z_public = logits(p_public . x)``.
+1. Read the logit batch ``Z = {logits(p . x) : p in S}`` and the
+   public logits ``z_public = logits(p_public . x)`` off the running
+   ``(s + 1, vocab)`` logits tensor (the first ``s`` rows are ``Z``,
+   the last row is ``z_public``); both are kept in sync by feeding
+   the same sampled ``x`` token to every row of the cached batch.
 2. Estimate the L1 distance between the per-batch softmax average and
    the public softmax, add ``Laplace(2 * sigma)`` noise.
 3. If the noisy distance meets the noisy threshold ``theta_hat`` the
@@ -40,6 +52,10 @@ Steps per iteration (paper Algorithm 1 lines 9 to 22):
    token from the budget ``r``, refresh ``theta_hat``.
 4. Otherwise the public prompt is safe: sample from
    ``softmax(z_public / tau_public)`` at no privacy cost.
+5. Append the sampled token to every row of the batch and call
+   :func:`token_generation.continue_batched` to extend the shared
+   KV cache by one position; the next iteration's logits come back
+   from that single ``(s + 1, 1)`` forward pass.
 
 The single change relative to the paper's free-form algorithm is that
 this implementation handles a single batch (the project's standalone
@@ -48,6 +64,9 @@ line 6 is elided.
 """
 
 from __future__ import annotations
+
+from collections.abc import Callable
+from typing import Any
 
 import numpy as np
 import torch
@@ -115,7 +134,6 @@ def _laplace(scale: float) -> float:
 def generate(
     texts: list[str],
     *,
-    label: str,
     s: int,
     c: float,
     tau: float,
@@ -126,24 +144,37 @@ def generate(
     delta: float | None = None,
     target_epsilon: float | None = None,
     max_total_tokens: int = 256,
+    wrap_fn: Callable[..., str] = wrap,
+    **wrap_kwargs: Any,
 ) -> tuple[str, PrivacyAccount]:
     """Run Amin et al. Algorithm 1 on one batch and return the synthetic
     string together with its privacy account.
 
     ``texts`` are pre-rendered memory-items blocks, one per batch
-    member (each string drops into the ``{items}`` slot of
-    :data:`~agent_memories.agent.privacy.prompts.GENERIC_PROMPT` per
-    WP2-plan §3.3). ``label`` is the round-1 DP-released label
-    string; it is public input to this round by post-processing and
-    appears in the same position in both the batch prompts and the
-    public prompt (``wrap(label=label)``), so the caller never
-    composes prompt boilerplate themselves. Each wrapped prompt is
-    tokenised once via :func:`tg.encode_chat` so the Gemma 2 IT chat
-    template is applied; the per-step loop appends sampled token ids
-    directly to each pre-tokenised prompt and feeds the concatenation
-    to :func:`tg.get_next_token_logits_from_ids`, so the unchanging
-    prompt prefix is never re-tokenised and the running suffix is
-    never decoded then re-encoded.
+    member; each string drops into the ``{items}`` slot of whichever
+    template ``wrap_fn`` formats. ``wrap_fn`` defaults to the round-2
+    :func:`prompts.wrap` (WP2-plan §3.3 content-only template), so
+    callers that previously passed ``label=...`` continue to work
+    unchanged. The round-1 caller in ``scripts/amin_et_al/WP2_8.py``
+    passes ``wrap_fn=prompts.wrap_label`` together with ``k=...``,
+    and any other template-specific keyword arguments are forwarded
+    through ``**wrap_kwargs``. The public prompt is built by calling
+    ``wrap_fn(**wrap_kwargs)`` with no ``items`` argument so the
+    items block defaults to the literal ``"(no examples)"``
+    (WP2-plan §3.4), aligning format tokens between the public and
+    private branches.
+
+    Each wrapped prompt is tokenised once via :func:`tg.encode_chat`
+    so the Gemma 2 IT chat template is applied; the ``s`` sensitive
+    prompts and the public prompt are then stacked into one
+    ``s + 1`` batch and forwarded together via
+    :func:`tg.prefill_padded`, which returns the per-row next-token
+    logits and a :class:`tg.PrefillState` carrying the shared KV cache.
+    Each later sampling step issues a single ``(s + 1, 1)``
+    continuation via :func:`tg.continue_batched`, so the prompt
+    prefix is neither re-tokenised nor re-attended-to, and the
+    sensitive and public branches advance in lockstep on the same
+    sampled ``x_ids`` suffix.
 
     ``delta`` defaults to ``1 / s`` (the Amin Appendix C convention
     used by :func:`get_epsilon`); pass it explicitly to override.
@@ -163,6 +194,7 @@ def generate(
             f"r={r!r}, target_epsilon={target_epsilon!r}."
         )
     if r is None:
+        assert target_epsilon is not None  # XOR check above
         r = solve_r(target_epsilon, delta, s=s, c=c, tau=tau, sigma=sigma)
 
     stop = tg.stop_ids()  # eos plus <end_of_turn> for the IT regime
@@ -171,14 +203,19 @@ def generate(
     n_public = 0  # number of public tokens used
     theta_hat = theta + _laplace(sigma)  # noisy threshold
 
-    prompts = [wrap(items=text, label=label) for text in texts]
-    public_prompt = wrap(label=label)
+    prompts = [wrap_fn(items=text, **wrap_kwargs) for text in texts]
+    public_prompt = wrap_fn(**wrap_kwargs)
     prompt_ids = [tg.encode_chat(p) for p in prompts]
     public_ids = tg.encode_chat(public_prompt)
 
+    # Stack the s sensitive prompts and the single public prompt into one
+    # batch of size s + 1; one padded batched prefill builds the shared
+    # KV cache so every later token costs just one (B, 1) continuation
+    # rather than s + 1 full-prompt forward passes.
+    logits, state = tg.prefill_padded(prompt_ids + [public_ids])
     while t < r and len(x_ids) < max_total_tokens:
-        Z = tg.get_next_token_logits_from_ids([ids + x_ids for ids in prompt_ids])
-        z_public = tg.get_next_token_logits_from_ids([public_ids + x_ids])[0]
+        Z = logits[: len(prompt_ids)]
+        z_public = logits[len(prompt_ids)]
 
         d_hat = softmax_l1_distance(Z, z_public, s) + _laplace(2.0 * sigma)
 
@@ -193,6 +230,11 @@ def generate(
         x_ids.append(tok)
         if tok in stop:
             break
+
+        # Same sampled token is appended to every row of the batch, so the
+        # public branch tracks the private branch's running suffix verbatim
+        # (matches the original [ids + x_ids] / [public_ids + x_ids] coupling).
+        logits, state = tg.continue_batched(state, [tok] * (len(prompt_ids) + 1))
 
     rho = rho_for(r, s, c, tau, sigma)
     account = PrivacyAccount(

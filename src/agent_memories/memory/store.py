@@ -39,7 +39,7 @@ import numpy as np
 
 from .embedder import Embedder
 
-Outcome = Literal["successful", "failed"]
+Outcome = Literal["successful", "failed", "shared"]
 
 
 @dataclass
@@ -111,14 +111,20 @@ class MemoryEntry:
 
 
 def _coerce_outcome(raw: Any) -> Outcome:
-    """Constrain ``raw`` to one of the two literal outcomes.
+    """Constrain ``raw`` to one of the three literal outcomes.
 
     Defaults to ``"failed"`` on any unrecognised value so a hand-edited
     JSONL file with a typo does not silently produce a memory tagged
-    as a validated strategy.
+    as a validated strategy. ``"shared"`` is recognised so the WP2
+    cross-user store (WP2-plan §7.1 / §8.1) round-trips cleanly when
+    loaded back via :meth:`MemoryStore.load`; pre-WP2 per-user JSONLs
+    that only ever wrote ``"successful"`` / ``"failed"`` continue to
+    load identically.
     """
     if raw == "successful":
         return "successful"
+    if raw == "shared":
+        return "shared"
     return "failed"
 
 

@@ -55,9 +55,6 @@ LABEL = "attending a recent event"
 # DP runs are compared on identical prompts.
 
 MODEL_NAME = "google/gemma-2-2b-it"
-# Project standard per WP2-plan §5: the instruction-tuned 2B Gemma
-# loaded with chat-template prompting via :func:`tg.encode_chat`.
-# The IT-vs-base ablation lives in :mod:`compare_gemma` only.
 
 
 def sample_next_token(Z: torch.Tensor, c: float) -> int:

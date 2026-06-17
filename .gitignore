@@ -65,3 +65,6 @@ htmlcov/
 
 # WP1.5 runtime memory stores
 data/memories/
+
+# WP2 demo-harness outputs (run_post_processing_demo.py, WP2_8.py)
+scripts/amin_et_al/outputs/
