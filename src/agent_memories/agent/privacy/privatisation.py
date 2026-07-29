@@ -76,7 +76,7 @@ from .privacy_accounting import PrivacyAccount, epsilon_from_rho, rho_for, solve
 from .prompts import wrap
 
 
-def clip_recenter(Z: torch.Tensor, c: float) -> torch.Tensor:
+def clip_recenter(Z: torch.Tensor, c: float) -> torch.Tensor:  # noqa: N803
     """Amin et al. Equation 1.
 
     ``clip_c(z)_i = max(-c, z_i - max_j(z_j) + c)``. The shift by
@@ -92,7 +92,7 @@ def clip_recenter(Z: torch.Tensor, c: float) -> torch.Tensor:
     return torch.clamp(shifted, min=-c)
 
 
-def softmax_l1_distance(Z: torch.Tensor, z_public: torch.Tensor, s: int) -> float:
+def softmax_l1_distance(Z: torch.Tensor, z_public: torch.Tensor, s: int) -> float:  # noqa: N803
     """Amin et al. Equation 2.
 
     ``d(Z, z_public) = || (1/s) * sum_{z in Z} softmax(z)
@@ -108,14 +108,14 @@ def softmax_l1_distance(Z: torch.Tensor, z_public: torch.Tensor, s: int) -> floa
     return float(torch.norm(p_avg - p_public, p=1).item())
 
 
-def sample_private(Z: torch.Tensor, c: float, tau: float, s: int) -> int:
+def sample_private(Z: torch.Tensor, c: float, tau: float, s: int) -> int:  # noqa: N803
     """Exponential-mechanism token sample from the clipped batch average.
 
     Returns one token id sampled from
     ``softmax((1/s) * sum clip_c(z) / tau)``. The divisor ``s`` is the
     expected batch size.
     """
-    Z_clipped = clip_recenter(Z, c)
+    Z_clipped = clip_recenter(Z, c)  # noqa: N806
     z_bar = Z_clipped.sum(dim=0) / s
     probs = torch.softmax(z_bar / tau, dim=-1)
     return int(torch.multinomial(probs, num_samples=1).item())
@@ -214,7 +214,7 @@ def generate(
     # rather than s + 1 full-prompt forward passes.
     logits, state = tg.prefill_padded(prompt_ids + [public_ids])
     while t < r and len(x_ids) < max_total_tokens:
-        Z = logits[: len(prompt_ids)]
+        Z = logits[: len(prompt_ids)]  # noqa: N806
         z_public = logits[len(prompt_ids)]
 
         d_hat = softmax_l1_distance(Z, z_public, s) + _laplace(2.0 * sigma)

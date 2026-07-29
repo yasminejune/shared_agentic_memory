@@ -119,7 +119,7 @@ def _run_roundtrip(path: Path) -> bool:
     loaded = read_buffer(path)
 
     matched = len(loaded) == len(original) and all(
-        a.to_jsonl_dict() == b.to_jsonl_dict() for a, b in zip(loaded, original)
+        a.to_jsonl_dict() == b.to_jsonl_dict() for a, b in zip(loaded, original, strict=True)
     )
     print(f"Wrote {len(original)} entry/entries; reloaded {len(loaded)}; equal={matched}")
     for entry in loaded:

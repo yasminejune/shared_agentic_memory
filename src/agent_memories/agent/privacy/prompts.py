@@ -50,6 +50,14 @@ privacy cost.
 
 from __future__ import annotations
 
+GENERIC_ONE_PROMPT = """
+     [ User ]\n
+     Here are agent trajectory memories with Label : {label} .\n
+     Memories: {items}\n
+     Please give me another one .\n
+     # [ Assistant ]\n
+     Memory: """
+
 GENERIC_PROMPT = (
     "You will be given memory items distilled from one web-navigation "
     "trajectory related to {label}. Produce a single short paragraph "
