@@ -78,9 +78,7 @@ def rho_for(r: int, s: int, c: float, tau: float, sigma: float) -> float:
     return r * (exp_mech_term + svt_term)
 
 
-def get_epsilon(
-    r: int, s: int, c: float, tau: float, sigma: float
-) -> tuple[float, float]:
+def get_epsilon(r: int, s: int, c: float, tau: float, sigma: float) -> tuple[float, float]:
     rho = rho_for(r, s, c, tau, sigma)
 
     delta = 1 / s
@@ -105,20 +103,35 @@ def solve_r(
     c: float,
     tau: float,
     sigma: float,
-    r_max: int = 80,
+    r_max: int | None = 80,
 ) -> int:
     """Return the largest integer ``r`` such that the realised epsilon
-    is at most ``target_epsilon``, capped at ``r_max``.
+    is at most ``target_epsilon``.
+
+    ``r_max`` caps the search when set (default 80, WP2 demo convention).
+    Pass ``r_max=None`` for an uncapped search that stops when the next
+    ``r`` would exceed ``target_epsilon``.
 
     Returns 0 when even ``r = 1`` exceeds the budget.
     """
     best_r = 0
-    for r in range(1, r_max + 1):
-        eps = epsilon_from_rho(rho_for(r, s, c, tau, sigma), delta)
-        if eps <= target_epsilon:
-            best_r = r
-        else:
-            break
+    r = 1
+    if r_max is None:
+        while True:
+            eps = epsilon_from_rho(rho_for(r, s, c, tau, sigma), delta)
+            if eps <= target_epsilon:
+                best_r = r
+                r += 1
+            else:
+                break
+    else:
+        while r <= r_max:
+            eps = epsilon_from_rho(rho_for(r, s, c, tau, sigma), delta)
+            if eps <= target_epsilon:
+                best_r = r
+                r += 1
+            else:
+                break
     return best_r
 
 

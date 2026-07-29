@@ -1,11 +1,66 @@
-# Python 3.10+
-conda create -n webarena python=3.10; conda activate webarena
-pip install -r requirements.txt
-playwright install
-pip install -e .
+# Local WebArena via webarena-setup (BrowserGym recommended path)
 
-# optional, dev only
-pip install -e ".[dev]"
-mypy --install-types --non-interactive browser_env agents evaluation_harness
-pip install pre-commit
-pre-commit install
+## Prerequisites
+
+- Docker with enough disk space (~200 GB+ if you include the OpenStreetMap tile stack)
+- Python 3.10+ project venv: `make install` (installs browsergym-webarena, NLTK punkt_tab, Playwright Chromium)
+
+## 1. webarena-setup
+
+Follow https://github.com/ServiceNow/BrowserGym/tree/main/browsergym/webarena#option-2-webarena-setup
+to pull the official WebArena Docker images and start all seven services.
+
+## 2. WA_* environment variables (localhost template)
+
+Export these before running scripts/webarena/run_webarena.py (adjust host/ports if your setup differs):
+
+  export WA_SHOPPING=http://localhost:7770
+  export WA_SHOPPING_ADMIN=http://localhost:7780/admin
+  export WA_REDDIT=http://localhost:9999
+  export WA_GITLAB=http://localhost:8023
+  export WA_MAP=http://localhost:3000
+  export WA_WIKIPEDIA=http://localhost:8888
+  export WA_HOMEPAGE=http://localhost:4399
+
+# After webarena-setup is running; verify with:
+  curl http://localhost:7565/status
+  export WA_FULL_RESET=http://localhost:7565
+
+## 3. NLTK punkt_tab
+
+Required before `import browsergym.webarena`. Installed automatically by `make install`, or run manually:
+
+  python -c "import nltk; nltk.download('punkt_tab')"
+
+## 4. Run trajectories, then build memories (two scripts)
+
+Step A — agent trajectories only (tasks 0–4 first):
+
+  python scripts/webarena/run_webarena.py --start-id 0 --end-id 4
+
+Step B — judge + memory extraction + embeddings from trajectories:
+
+  python scripts/webarena/build_memories_from_trajectories.py --start-id 0 --end-id 4
+
+Full corpus (812 tasks, multi-day):
+
+  python scripts/webarena/run_webarena.py
+  python scripts/webarena/build_memories_from_trajectories.py
+
+Resume: each script skips task_ids already completed in its own output CSV.
+
+## 5. Reset cadence
+
+- The runner calls full_reset() once at start when WA_FULL_RESET is set.
+- Each task gets a fresh BrowserGym env (new browser context).
+- Docker DB state (shopping carts, gitlab posts, etc.) can drift across tasks.
+- Use --reset-every N for periodic full_reset mid-run, or run manual full reset after a full 812 pass.
+
+## 6. CSV output
+
+Trajectories: data/webarena/trajectories.csv (gitignored).
+Memories: data/webarena/trajectories_memories.csv (gitignored).
+
+judge_outcome and harness_success are independent columns:
+- judge_outcome: ReasoningBank LLM-as-Judge on the trajectory
+- harness_success: WebArena eval harness (reward > 0 via BrowserGym)
