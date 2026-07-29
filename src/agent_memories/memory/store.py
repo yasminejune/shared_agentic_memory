@@ -97,6 +97,12 @@ class MemoryEntry:
             "created_at": self.created_at,
         }
 
+    def to_dict_without_embedding(self) -> dict[str, Any]:
+        """Return a JSON-serialisable dict omitting the embedding vector."""
+        data = self.to_jsonl_dict()
+        del data["embedding"]
+        return data
+
     @classmethod
     def from_jsonl_dict(cls, data: dict[str, Any]) -> MemoryEntry:
         """Hydrate an entry from a parsed JSONL line in the WP1.6 schema."""

@@ -125,9 +125,38 @@ JSON_PROMPT = (
     "{items}"
 )
 
+JSON_ONE_PROMPT = (
+    "Return exactly {k} labelsm one of which needs to summarise the memory items below.\n"
+    "Each label must be 1–4 words.\n"
+    "Return only a JSON array of strings.\n"
+    "No explanations, numbering, markdown, or extra text.\n"
+    "\n"
+    "Example:\n"
+    '["pricing risk", "customer churn", "supply delay", '
+    '"budget pressure", "staff training", "data quality"]\n'
+    "\n"
+    "Memory items:\n"
+    "{items}"
+)
+
 
 JSON_DISCRIMINATIVE_PROMPT = (
     "Return exactly {k} labels that summarise the memory items below.\n"
+    "Each label must be 1–4 words and on a DISTINCT facet — no two labels\n"
+    "may be synonyms, paraphrases, or describe the same aspect.\n"
+    "Return only a JSON array of strings.\n"
+    "No explanations, numbering, markdown, or extra text.\n"
+    "\n"
+    "Example:\n"
+    '["pricing risk", "customer churn", "supply delay", '
+    '"budget pressure", "staff training", "data quality"]\n'
+    "\n"
+    "Memory items:\n"
+    "{items}"
+)
+
+JSON_DISCRIMINATIVE_ONE_PROMPT = (
+    "Return exactly {k} labels, one of which needs to summarise the memory items below.\n"
     "Each label must be 1–4 words and on a DISTINCT facet — no two labels\n"
     "may be synonyms, paraphrases, or describe the same aspect.\n"
     "Return only a JSON array of strings.\n"
@@ -182,6 +211,19 @@ def wrap_json(items: str = "(no examples)", *, k: int) -> str:
     return JSON_PROMPT.format(k=k, items=items)
 
 
+def wrap_one_json(items: str = "(no examples)", *, k: int) -> str:
+    """Format :data:`JSON_PROMPT` for one batch member or the SVT public prompt.
+
+    Sibling of :func:`wrap_numbered`. The default empty-items body
+    (``"(no examples)"``) yields the SVT public prompt; passing a
+    rendered items block yields the matching private prompt for that
+    batch member. ``k`` substitutes into the ``"Return exactly {k}
+    labels."`` line so the count instruction matches the ``--k`` the
+    user passes.
+    """
+    return JSON_ONE_PROMPT.format(k=k, items=items)
+
+
 def wrap_json_discriminative(items: str = "(no examples)", *, k: int) -> str:
     """Format :data:`JSON_DISCRIMINATIVE_PROMPT` for one batch member or SVT public.
 
@@ -193,6 +235,19 @@ def wrap_json_discriminative(items: str = "(no examples)", *, k: int) -> str:
     attributable to the instruction prose alone.
     """
     return JSON_DISCRIMINATIVE_PROMPT.format(k=k, items=items)
+
+
+def wrap_json_discriminative_one(items: str = "(no examples)", *, k: int) -> str:
+    """Format :data:`JSON_DISCRIMINATIVE_PROMPT` for one batch member or SVT public.
+
+    Identical shape to :func:`wrap_json` so the comparison harness
+    passes one through the other transparently. The only material
+    difference vs. :data:`JSON_PROMPT` is the added anti-redundancy
+    clause asking for distinct facets; the JSON output format and
+    the worked example are unchanged so any qualitative effect is
+    attributable to the instruction prose alone.
+    """
+    return JSON_DISCRIMINATIVE_ONE_PROMPT.format(k=k, items=items)
 
 
 _NUMBERED_LINE = re.compile(r"^\s*(\d+)\.\s*(.+?)\s*$")
@@ -276,9 +331,10 @@ class PromptVariant:
 
 
 VARIANTS: list[PromptVariant] = [
-    PromptVariant("numbered_wp2plan_3.2", wrap_numbered, parse_numbered),
     PromptVariant("json_array", wrap_json, parse_json),
+    PromptVariant("json_one_array", wrap_one_json, parse_json),
     PromptVariant("json_discriminative", wrap_json_discriminative, parse_json),
+    PromptVariant("json_discriminative_one", wrap_json_discriminative_one, parse_json),
     PromptVariant("json_specific", wrap_json_specific, parse_json),
 ]
 

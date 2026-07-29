@@ -41,11 +41,13 @@ Deviations from the paper (flagged for the methodology chapter):
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 
 from agent_memories.agent.state import AgentState
 from agent_memories.types import ChatClient
 
-from .store import MemoryEntry, MemoryItem, MemoryStore, Outcome
+from .embedder import Embedder
+from .store import MemoryEntry, MemoryItem, MemoryStore, Outcome, _utcnow_iso
 
 JUDGE_MAX_TOKENS = 256
 EXTRACTOR_MAX_TOKENS = 768
@@ -160,6 +162,20 @@ FAILURE_SYSTEM_PROMPT = (
 EXTRACTOR_USER_PROMPT_TEMPLATE = "Query: {query}\nTrajectory: {trajectory}"
 
 
+@dataclass(frozen=True)
+class MemoryBuildResult:
+    """In-memory output of :meth:`MemoryPipeline.build_from_run`.
+
+    ``judge_outcome`` is always the LLM-as-Judge signal. ``entry`` is
+    ``None`` when the extractor produced zero parseable items (distinct
+    from a judge failure).
+    """
+
+    judge_outcome: Outcome
+    entry: MemoryEntry | None
+    memory_extracted: bool
+
+
 class MemoryPipeline:
     """Two-stage ReasoningBank memory creator backed by a chat LLM and a store."""
 
@@ -185,6 +201,30 @@ class MemoryPipeline:
         treats an empty extraction the same as no new memory at all,
         rather than writing a useless entry).
         """
+        result = self.build_from_run(
+            state,
+            final_state=final_state,
+            user_id=self.store.user_id,
+            embedder=self.store.embedder,
+        )
+        if result.entry is None:
+            return None
+        return self.store.add_entry(
+            query=result.entry.query,
+            outcome=result.entry.outcome,
+            items=result.entry.items,
+        )
+
+    def build_from_run(
+        self,
+        state: AgentState,
+        *,
+        final_state: str = "",
+        user_id: str,
+        embedder: Embedder,
+        response: str = "N/A",
+    ) -> MemoryBuildResult:
+        """Build judge outcome and optional :class:`MemoryEntry` without writing to disk."""
         aim = state.get("aim", "")
         trajectory = _serialise_trajectory(state)
 
@@ -192,17 +232,42 @@ class MemoryPipeline:
             intent=aim,
             trajectory=trajectory,
             final_state=final_state,
+            response=response,
         )
         print(f"[Memory] Judge outcome: {outcome}", flush=True)
 
         items = self._extract(aim=aim, trajectory=trajectory, outcome=outcome)
         print(f"[Memory] Extracted {len(items)} item(s) from trajectory.", flush=True)
         if not items:
-            return None
+            return MemoryBuildResult(
+                judge_outcome=outcome,
+                entry=None,
+                memory_extracted=False,
+            )
 
-        return self.store.add_entry(query=aim, outcome=outcome, items=items)
+        embedding = embedder.embed(aim)
+        entry = MemoryEntry(
+            user_id=user_id,
+            query=aim,
+            outcome=outcome,
+            items=items,
+            embedding=embedding,
+            created_at=_utcnow_iso(),
+        )
+        return MemoryBuildResult(
+            judge_outcome=outcome,
+            entry=entry,
+            memory_extracted=True,
+        )
 
-    def _classify(self, *, intent: str, trajectory: str, final_state: str) -> Outcome:
+    def _classify(
+        self,
+        *,
+        intent: str,
+        trajectory: str,
+        final_state: str,
+        response: str = "N/A",
+    ) -> Outcome:
         """Run the LLM-as-Judge and return the binary outcome.
 
         Malformed output (no parseable ``Status:`` line) defaults to
@@ -214,7 +279,7 @@ class MemoryPipeline:
             intent=intent,
             trajectory=trajectory,
             final_state=final_state or "(no final state available)",
-            response="N/A",
+            response=response,
         )
         reply = self.client.chat(
             JUDGE_SYSTEM_PROMPT,

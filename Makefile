@@ -18,6 +18,7 @@ venv:
 install: venv
 	$(PYTHON) -m pip install -e ".[dev]"
 	$(PYTHON) -m playwright install chromium
+	$(PYTHON) -c "import nltk; nltk.download('punkt_tab')"
 
 ## format: auto-format source code with Black
 format:

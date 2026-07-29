@@ -73,7 +73,6 @@ def _plot_ranked_curves(
         plt.plot(ranked, linewidth=1.5, label=name)
 
     baseline = vectors["baseline"]
-    baseline_order = np.argsort(-baseline)
     for rank, token_id in enumerate(top_token_ids, start=1):
         y = baseline[int(token_id)]
         label = _token_label(int(token_id))

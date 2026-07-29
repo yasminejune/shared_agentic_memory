@@ -18,10 +18,10 @@ import torch
 from agent_memories.agent.privacy.privatisation import clip_recenter
 from agent_memories.agent.privacy.prompts import wrap_label
 from agent_memories.agent.privacy.token_generation import (
+    continue_batched,
     decode,
     encode_chat,
     prefill_padded,
-    continue_batched,
 )
 
 EXAMPLES_PATH = Path("scripts/amin_et_al/examples.csv")
@@ -99,7 +99,9 @@ def _plot_jaccard(matrix: np.ndarray, labels: list[str], out_path: Path, *, c: f
     plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
     for i in range(matrix.shape[0]):
         for j in range(matrix.shape[1]):
-            ax.text(j, i, f"{matrix[i, j]:.2f}", ha="center", va="center", color="white", fontsize=7)
+            ax.text(
+                j, i, f"{matrix[i, j]:.2f}", ha="center", va="center", color="white", fontsize=7
+            )
     plt.tight_layout()
     plt.savefig(out_path, dpi=180)
     plt.close()

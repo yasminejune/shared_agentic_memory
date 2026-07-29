@@ -69,13 +69,15 @@ privacy-free Amin loop's :data:`MAX_TOTAL_TOKENS` is a hard cap on the
 total decoded length and is also independent of N. See the inline comments
 on each constant for the retune rationale.
 
-At large N the Amin paths (``amin_nodp``, ``amin_dp``) never stack every
-sensitive prompt into one Gemma forward pass. Instead
-:func:`_stack_next_token_logits_microbatched` runs forwards in chunks of
-``--gemma-chunk-size`` (default :data:`GEMMA_CHUNK_SIZE_DEFAULT`) and
-concatenates the per-row next-token logits before averaging. The averaged
-logits are identical to a single batched forward; only peak GPU memory
+``amin_dp`` calls production :func:`~agent_memories.agent.privacy.generate`
+(the KV-cache ``prefill_padded`` + ``continue_batched`` path used by
+:mod:`scripts.amin_et_al.WP2_8`). If that forward pass OOMs on long
+inputs, it falls back to :func:`_generate_dp_microbatched`, which runs
+forwards in chunks of ``--gemma-chunk-size`` (default
+:data:`GEMMA_CHUNK_SIZE_DEFAULT`) without KV-cache reuse so peak memory
 drops from ``O(N * seq_len)`` to ``O(gemma_chunk_size * seq_len)``.
+``amin_nodp`` always uses the microbatched helper because it has no
+production twin in ``privatisation``.
 
 The script writes one JSONL record per method to
 :data:`OUTPUTS_PATH` in overwrite mode (so the file always reflects the
@@ -108,6 +110,7 @@ from umap import UMAP
 from agent_memories.agent.privacy import (
     check_delta,
     epsilon_from_rho,
+    generate,
     rho_for,
     solve_r,
 )
@@ -270,9 +273,7 @@ def _generate_privacy_free_labels(
     x_ids: list[int] = []
     step = 0
     while len(x_ids) < max_total_tokens:
-        Z = _stack_next_token_logits_microbatched(
-            prompt_ids, x_ids, chunk_size=gemma_chunk_size
-        )
+        Z = _stack_next_token_logits_microbatched(prompt_ids, x_ids, chunk_size=gemma_chunk_size)
         z_bar = clip_recenter(Z, c).mean(dim=0)
         probs = torch.softmax(z_bar, dim=-1)
         tok = int(torch.multinomial(probs, num_samples=1).item())
@@ -321,9 +322,7 @@ def _generate_dp_microbatched(
     theta_hat = theta + _laplace(sigma)
 
     while t < r and len(x_ids) < max_total_tokens:
-        Z = _stack_next_token_logits_microbatched(
-            prompt_ids, x_ids, chunk_size=gemma_chunk_size
-        )
+        Z = _stack_next_token_logits_microbatched(prompt_ids, x_ids, chunk_size=gemma_chunk_size)
         z_public = _next_public_logits(public_ids, x_ids)
 
         d_hat = softmax_l1_distance(Z, z_public, s) + _laplace(2.0 * sigma)
@@ -355,6 +354,65 @@ def _generate_dp_microbatched(
     return tg.decode(x_ids), account
 
 
+def _is_oom_error(exc: RuntimeError) -> bool:
+    """True when ``exc`` looks like a GPU / MPS memory exhaustion."""
+    msg = str(exc).lower()
+    return any(needle in msg for needle in ("out of memory", "buffer size", "oom", "mps backend"))
+
+
+def _generate_dp(
+    texts: list[str],
+    *,
+    k: int,
+    r: int,
+    delta: float,
+    gemma_chunk_size: int,
+) -> tuple[str, PrivacyAccount, str]:
+    """DP Amin via production KV-cache path, microbatched fallback on OOM.
+
+    Returns ``(decoded_output, privacy_account, engine)`` where ``engine``
+    is ``"production"`` or ``"microbatched"`` for the JSONL ``extra`` field.
+    """
+    gen_kwargs = {
+        "s": S,
+        "c": C,
+        "tau": TAU,
+        "tau_public": TAU_PUBLIC,
+        "sigma": SIGMA,
+        "theta": THETA,
+        "r": r,
+        "delta": delta,
+        "max_total_tokens": MAX_TOTAL_TOKENS,
+        "wrap_fn": wrap_label,
+        "k": k,
+    }
+    print("  amin_dp: trying production generate (KV-cache path)...")
+    try:
+        raw_output, account = generate(texts, **gen_kwargs)
+        return raw_output, account, "production"
+    except RuntimeError as exc:
+        if not _is_oom_error(exc):
+            raise
+        print(
+            f"  amin_dp: KV-cache path OOM ({exc}); "
+            f"falling back to microbatched (chunk_size={gemma_chunk_size})..."
+        )
+        raw_output, account = _generate_dp_microbatched(
+            texts,
+            k=k,
+            s=S,
+            c=C,
+            tau=TAU,
+            tau_public=TAU_PUBLIC,
+            sigma=SIGMA,
+            theta=THETA,
+            r=r,
+            delta=delta,
+            gemma_chunk_size=gemma_chunk_size,
+        )
+        return raw_output, account, "microbatched"
+
+
 def run_amin_privacy_free(
     texts: list[str],
     *,
@@ -370,9 +428,7 @@ def run_amin_privacy_free(
     cosine-assigns every input text to its nearest label.
     """
     tg.set_model(MODEL_NAME)
-    raw_output = _generate_privacy_free_labels(
-        texts, k=k, gemma_chunk_size=gemma_chunk_size
-    )
+    raw_output = _generate_privacy_free_labels(texts, k=k, gemma_chunk_size=gemma_chunk_size)
 
     parsed = parse_json_labels(raw_output, k)
     labels = [text for text, _ in parsed]
@@ -480,19 +536,14 @@ def run_amin_dp(
             extra=extra,
         )
 
-    raw_output, account = _generate_dp_microbatched(
+    raw_output, account, dp_engine = _generate_dp(
         texts,
         k=k,
-        s=S,
-        c=C,
-        tau=TAU,
-        tau_public=TAU_PUBLIC,
-        sigma=SIGMA,
-        theta=THETA,
         r=r,
         delta=delta,
         gemma_chunk_size=gemma_chunk_size,
     )
+    print(f"  amin_dp: completed via {dp_engine} engine.")
 
     parsed = parse_json_labels(raw_output, k)
     labels = [text for text, _ in parsed]
@@ -510,6 +561,7 @@ def run_amin_dp(
         "rho": account.rho,
         "private_tokens_used": account.private_tokens_used,
         "public_tokens_used": account.public_tokens_used,
+        "dp_engine": dp_engine,
         "gemma_chunk_size": gemma_chunk_size,
         "n_batch_members": len(texts),
         "raw_output": raw_output,
@@ -894,9 +946,9 @@ def main() -> None:
         type=int,
         default=GEMMA_CHUNK_SIZE_DEFAULT,
         help=(
-            "Max sensitive prompts per Gemma forward pass for amin_nodp / "
-            f"amin_dp (default: {GEMMA_CHUNK_SIZE_DEFAULT}). Lower if MPS "
-            "still OOMs on long inputs; the averaged logits are unchanged."
+            "Max sensitive prompts per Gemma forward pass for amin_nodp and "
+            "for amin_dp when the production KV-cache path OOMs and the "
+            f"microbatched fallback kicks in (default: {GEMMA_CHUNK_SIZE_DEFAULT})."
         ),
     )
     args = parser.parse_args()
@@ -910,7 +962,7 @@ def main() -> None:
 
     # Load the dataset
     dataset = load_dataset("nayohan/multi_session_chat")
-    df = dataset['train'][:100]
+    df = dataset["train"][:100]
     texts: list[str] = [str(t) for t in df["dialogue"]]
     if not texts:
         parser.error("dataset is empty.")

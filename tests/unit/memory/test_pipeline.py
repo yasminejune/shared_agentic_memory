@@ -359,3 +359,54 @@ def test_judge_status_parser_variants(tmp_path: Path, reply: str, expected: str)
 
     assert entry is not None
     assert entry.outcome == expected
+
+
+def test_build_from_run_does_not_write_jsonl(tmp_path: Path) -> None:
+    """build_from_run returns an entry in memory without touching the store file."""
+    store = _make_store(tmp_path, {"buy shoes": [1.0, 0.0, 0.0]})
+    store_path = tmp_path / "user_a.jsonl"
+    client = _FakeClient(
+        [
+            "Thoughts: ok.\nStatus: success",
+            FAILURE_ONE_ITEM,
+        ]
+    )
+    pipeline = MemoryPipeline(client=client, store=store)
+
+    result = pipeline.build_from_run(
+        new_state(aim="buy shoes"),
+        final_state="",
+        user_id="webarena_batch",
+        embedder=store.embedder,
+    )
+
+    assert result.memory_extracted is True
+    assert result.entry is not None
+    assert result.judge_outcome == "successful"
+    assert result.entry.embedding == [1.0, 0.0, 0.0]
+    assert "embedding" not in result.entry.to_dict_without_embedding()
+    assert not store_path.exists()
+
+
+@pytest.mark.unit
+def test_build_from_run_splits_judge_from_extraction(tmp_path: Path) -> None:
+    """Judge success with zero extracted items keeps judge_outcome separate."""
+    store = _make_store(tmp_path)
+    client = _FakeClient(
+        [
+            "Thoughts: ok.\nStatus: success",
+            "Sorry, I cannot extract any items from this trajectory.",
+        ]
+    )
+    pipeline = MemoryPipeline(client=client, store=store)
+
+    result = pipeline.build_from_run(
+        new_state(aim="buy shoes"),
+        final_state="",
+        user_id="webarena_batch",
+        embedder=store.embedder,
+    )
+
+    assert result.judge_outcome == "successful"
+    assert result.memory_extracted is False
+    assert result.entry is None
