@@ -126,7 +126,7 @@ JSON_PROMPT = (
 )
 
 JSON_ONE_PROMPT = (
-    "Return exactly {k} labelsm one of which needs to summarise the memory items below.\n"
+    "Return exactly {k} labels, one of which needs to summarise the memory items below.\n"
     "Each label must be 1–4 words.\n"
     "Return only a JSON array of strings.\n"
     "No explanations, numbering, markdown, or extra text.\n"

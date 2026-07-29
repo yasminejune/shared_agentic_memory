@@ -8,6 +8,7 @@ docs/02_proposal/
 
 # Ignore all files of a type
 *.log
+.DS_Store
 CLAUDE.md
 
 # Ignore a specific file
