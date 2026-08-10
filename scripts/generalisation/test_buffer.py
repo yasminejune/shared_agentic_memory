@@ -11,9 +11,9 @@ WP2 orchestrator wires them in.
 The script runs three things and prints the result of each:
 
 1. A small grid of ``(bucket_sizes, X)`` cases through
-   :func:`select_round2_inputs` so the gating policy ("take first
-   ``X`` per triggered label, set aside the rest, set aside every
-   bucket that did not hit ``X``") is visible at a glance.
+   :func:`select_round2_inputs` so the gating policy ("pass every
+   entry from a triggered label to round 2; set aside every bucket
+   that did not hit ``X``") is visible at a glance.
 2. A round-trip of a synthetic carry-over list through
    :func:`write_buffer` / :func:`read_buffer` against a temp path
    under ``data/memories/.shared_buffer_test.jsonl``, checking that

@@ -56,15 +56,18 @@ diagram, with the two user-confirmed deviations recorded below):
 5. **X-gating.** Per the user's confirmed ``keep_and_document``
    choice, the gating threshold ``X_PER_LABEL > 1`` is honoured
    even though it introduces content-dependent gating (WP2-plan §10
-   open question 2). Every bucket below ``X`` and every memory
-   beyond the first ``X`` per qualifying label is pushed to the
-   carry-over buffer for the next trigger.
+   open question 2). Every qualifying bucket is passed to round 2 in
+   full; only buckets below ``X`` are pushed to the carry-over buffer
+   for the next trigger.
 
-6. **Round 2 (Amin Algorithm 1, S = X).** Per qualifying label,
-   one Amin run with ``S = X_PER_LABEL``, ``delta = 1 / X``,
-   ``r`` solved against ``EPSILON_PER_ROUND``. The wrap function
-   is :func:`agent_memories.agent.privacy.prompts.wrap` with the
-   DP-released label as ``label=...``; the output is the
+6. **Round 2 (Amin Algorithm 1, expected S = X).** Per qualifying
+   label, one Amin run receives every memory in the bucket while
+   retaining ``S = X_PER_LABEL`` as the expected batch size,
+   ``delta = 1 / X``, and ``r`` solved against
+   ``EPSILON_PER_ROUND``. Amin et al. permit actual batch sizes to
+   differ from expected ``S`` without invalidating Theorem 1. The
+   wrap function is :func:`agent_memories.agent.privacy.prompts.wrap`
+   with the DP-released label as ``label=...``; the output is the
    ``content`` field of a single shared :class:`MemoryItem`.
 
 7. **Post-processing (off-DP, free).**
@@ -392,15 +395,20 @@ def _run_round2_for_label(
     *,
     label: str,
     entries: list[MemoryEntry],
+    expected_batch_size: int,
     target_epsilon: float,
 ) -> tuple[str, int, float, float, PrivacyAccount] | None:
     """Run one round-2 generate call; return DP content + privacy account.
+
+    Every entry assigned to the qualifying label is included. Privacy
+    accounting continues to use the fixed threshold as Amin et al.'s
+    expected batch size, which need not equal the actual batch size.
 
     Returns ``None`` when ``solve_r`` cannot fit even one private
     token inside the budget (so the caller can skip the post-process
     step for this label without aborting the whole trigger).
     """
-    s = len(entries)
+    s = expected_batch_size
     delta = 1.0 / s
     r = solve_r(target_epsilon, delta, s=s, c=C, tau=TAU, sigma=SIGMA, r_max=R_MAX)
     if r == 0:
@@ -578,6 +586,7 @@ def main(argv: list[str] | None = None) -> None:
         result = _run_round2_for_label(
             label=label_str,
             entries=round2_entries,
+            expected_batch_size=args.x_per_label,
             target_epsilon=args.epsilon_per_round,
         )
         if result is None:
@@ -613,7 +622,8 @@ def main(argv: list[str] | None = None) -> None:
             {
                 "label_idx": label_idx,
                 "label": label_str,
-                "S": len(round2_entries),
+                "S": args.x_per_label,
+                "actual_batch_size": len(round2_entries),
                 "r": r_r2,
                 "delta": delta_r2,
                 "eps": eps_r2,

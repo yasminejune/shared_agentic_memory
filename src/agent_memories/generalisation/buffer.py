@@ -7,10 +7,7 @@ privacy budget on and what to do with the leftover memories. The
 caller's policy (from the user's design notes) is:
 
 * For each label, if the bucket size is at least ``X_PER_LABEL``,
-  take the first ``X`` memories for round-2 generation and push the
-  rest of the bucket to the carry-over buffer ("any memory assigned
-  to a label after that label already ran a shared memory
-  storage").
+  pass the whole bucket to round-2 generation.
 * For each label whose bucket holds fewer than ``X`` memories, push
   the whole bucket to the carry-over buffer ("any memory that was
   added to a label with insufficient memories will be set aside").
@@ -41,14 +38,12 @@ from agent_memories.memory import MemoryEntry
 class GatingResult:
     """Output of :func:`select_round2_inputs` for one trigger.
 
-    ``label_inputs[k]`` is either the list of ``entry_index`` values
-    chosen for round-2 generation under label ``k`` (length exactly
-    ``X_PER_LABEL`` whenever non-``None``) or ``None`` when label
-    ``k`` did not hit the ``X`` threshold this trigger. ``carry_over``
-    is the flat list of ``entry_index`` values pushed to the
-    carry-over buffer this trigger, in label-then-position order so
-    repeated invocations on the same input give a deterministic
-    persistence file.
+    ``label_inputs[k]`` is either the complete list of ``entry_index``
+    values assigned to qualifying label ``k`` or ``None`` when the
+    label did not hit the ``X`` threshold this trigger.
+    ``carry_over`` contains every entry from non-qualifying labels, in
+    label-then-position order so repeated invocations on the same
+    input give a deterministic persistence file.
     """
 
     label_inputs: list[list[int] | None]
@@ -80,8 +75,7 @@ def select_round2_inputs(
     carry_over: list[int] = []
     for bucket in buckets:
         if len(bucket) >= x_per_label:
-            label_inputs.append(list(bucket[:x_per_label]))
-            carry_over.extend(bucket[x_per_label:])
+            label_inputs.append(list(bucket))
         else:
             label_inputs.append(None)
             carry_over.extend(bucket)
