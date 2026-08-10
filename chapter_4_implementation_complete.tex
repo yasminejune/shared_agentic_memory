@@ -589,7 +589,9 @@ The three memories returned by the LLM, which each include a title, description 
 \subsection{Shared memory creation}
 The implementation questions around the shared memory creation regarded the privacy hyperparameter choice, the privacy budget, the parameters in the four steps of the shared memory creation, and the prompt choice.
 
-\subparagraph{Hyperparameters.} The privacy hyperparameters are held identical across Step 1 and Step 3, so that the two rounds are directly comparable and their budgets add without further analysis. The values in Table \ref{tab:dp-hyperparameters} are the settings of the pilot configuration and are for a theoretical, rather than practical proof-of-concept. The $\varepsilon$ in particular is set far above any privacy-meaningful level.
+\subparagraph{Hyperparameters.} The privacy hyperparameters are held identical across Step 1 and Step 3, so that the two rounds are directly comparable and their budgets add without further analysis. The exception is the expected batch size: Step 1 uses the public number of items per complete cycle, $s_1=B$, while Step 3 uses the public minimum number of items required for a label, $s_3=X$. The values in Table \ref{tab:dp-hyperparameters} are the settings of the pilot configuration and are for a theoretical, rather than practical proof-of-concept. The $\varepsilon$ in particular is set far above any privacy-meaningful level.
+
+The protected example is one memory item rather than one trajectory. Each trajectory produces between one and three ReasoningBank memory items, and these are flattened before either private-prediction round. A trajectory containing three memories therefore contributes three separate Gemma prompt rows and counts as three examples in the privacy mechanism. The guarantee is consequently add-or-remove-one-item differential privacy, and not user-level privacy.
 
 % INTERIM TABLE
 \begin{table}[t]
@@ -605,7 +607,7 @@ $\sigma$ & Laplace noise scale for the threshold & 0.1 \\
 $\theta$ & Public/private distance threshold & 0.0 \\
 $r_{\max}$ & Cap on private tokens per output & 80 \\
 $\varepsilon$ & Privacy budget per round & 200.0 \\
-$\delta$ & Privacy $\delta$ per round & $1/s$ \\
+$\delta$ & Privacy $\delta$ per round & $10^{-5}$ \\
 \hline
 \end{tabular}
 \caption{\textbf{Interim.} Differential privacy hyperparameters of the pilot configuration, applied identically to Step 1 and Step 3. These values are provisional and are superseded once the budget is retuned.}
@@ -615,7 +617,7 @@ $\delta$ & Privacy $\delta$ per round & $1/s$ \\
 \subparagraph{Privacy budget.} The privacy budget is not spent directly. For a given target $\varepsilon$ and batch size $s$, the code solves for the number of private tokens $r$ that fit inside that budget. Generation then stops once $r$ private tokens have been sampled. Because $\varepsilon$ is accounted from the budgeted $r$ rather than from the tokens the generation actually consumed, a memory that terminates early is reported at the full cost of its budget. The reported $\varepsilon$ is therefore an upper bound on what was spent. Two further conditions halt generation before $r$ is exhausted: a total cap of 256 tokens across the private and public branches combined, since this seems sufficiently long for a memory and caps the generation duration, and the model emitting either its end-of-sequence token or the end-of-turn token of the instruction-tuned chat template.
 
 \subparagraph{Step 1 - Labels per cycle.}
-The number of labels generated per cycle is 80. The choice of creating 80 labels is a simple deduction that for a batch size of 30, where each task yields 3 memories to a batch, one would need approximately 10 tasks per label. The batch size of 30 is what then determines the privacy budget.
+The number of labels generated per cycle is 80. A complete cycle contains exactly the configurable public count $B$ of new memory items. Step 1 therefore uses $s_1=B$, regardless of how many trajectories produced those items. Fewer than $B$ available items remain pending until a complete cycle can be formed.
 
 \subparagraph{Step 1 - Prompt.}
 The prompt in Table \ref{tab:label-prompt} is the prompt used in the differentially private mechanism in Step 1 to generate the labels.
@@ -623,10 +625,10 @@ The prompt in Table \ref{tab:label-prompt} is the prompt used in the differentia
 \subparagraph{Step 1 - Output parsing.} The output of the mechanism is a JSON array of label strings, which is parsed with three successive attempts. The output is first parsed as JSON directly. Failing that, a closing bracket is appended, since differentially private sampling can cut the output short before the model reaches it. If this still fails, every double-quoted substring in the output is taken as a label candidate. Any slot that none of the three attempts fills is padded with a placeholder label, and flagged as a fallback in the audit record. A placeholder label will rarely attract memories in Step 2, and the memories that would have been assigned to it are carried into the next cycle rather than lost.
 
 \subparagraph{Step 2 - Minimum number of memories for generation.}
-The threshold x, the minimum number of memories a label must attract before a shared memory is generated from it, is set to 5. Every memory in a bucket that does not reach five is written to a carry-over file and re-enters the mechanism at the next cycle.
+The threshold $X$, the minimum number of memory items a label must attract before a shared memory is generated from it, is set to 5. Every item in a bucket that does not reach five is written separately to a carry-over file and re-enters the mechanism at the next cycle.
 
 \subparagraph{Step 3 - Number of memories generated per label.}
-The mechanism produces exactly one shared memory per qualifying label per cycle. While the Amin et al. paper runs Algorithm 1 repeatedly to build up a dataset of many synthetic examples from the same private corpus, this thesis focuses on the simplest implementation with one memory. The number of shared memories available to the agent grows across cycles instead, as new private memories accumulate and new labels are synthesised.
+The mechanism produces exactly one shared memory per qualifying label per cycle. Every item assigned to a qualifying label is passed to Gemma as a separate prompt row, including when the realised bucket contains more than $X$ items. The expected batch size used for Step 3 accounting remains the public value $s_3=X$ rather than the realised private count. While the Amin et al. paper runs Algorithm 1 repeatedly to build up a dataset of many synthetic examples from the same private corpus, this thesis focuses on the simplest implementation with one memory. The number of shared memories available to the agent grows across cycles instead, as new private memories accumulate and new labels are synthesised.
 
 \subparagraph{Step 4 - Title and description generation.}
 The title and description are generated in a single Qwen call at temperature 0. The reply is rejected if the title is absent, runs beyond ten words, or ends in punctuation, and if the description is absent. On rejection the call is repeated once, and if the second reply also fails validation the title and description are derived from the content itself: the title becomes its first eight words, and the description its first sentence. The fallback is deterministic and takes its input from the content released in Step 3, so it is a post-processing step like the LLM call it replaces and costs no additional budget.
@@ -646,14 +648,14 @@ Once a cycle has written its shared memories, they become available to the agent
         \toprule
         \multicolumn{1}{@{}c@{}}{\textbf{System Prompt}} \\
         \midrule
-        Return exactly {k} labels that summarise the memory items below. Each label must be 1–4 words and on a DISTINCT facet — no two labels may be synonyms, paraphrases, or describe the same aspect. Return only a JSON array of strings.
+        Return exactly {k} labels that summarise the task query below. Each label must be 1–4 words and on a DISTINCT facet — no two labels may be synonyms, paraphrases, or describe the same aspect. Return only a JSON array of strings.
         No explanations, numbering, markdown, or extra text.\newline
         \newline
         Example:\newline
         ["pricing risk", "customer churn", "supply delay", '
         '"budget pressure", "staff training", "data quality"]\newline
         \newline
-        Memory items:\newline
+        Task query:\newline
         \{items\}
         \bottomrule
     \end{tabularx}
@@ -669,14 +671,14 @@ Once a cycle has written its shared memories, they become available to the agent
         \toprule
         \multicolumn{1}{@{}c@{}}{\textbf{System Prompt}} \\
         \midrule
-        You will be given memory items distilled from one web-navigation
+        You will be given one memory item distilled from a web-navigation
         trajectory related to {label}. Produce a single short paragraph
         (1 to 3 sentences) that captures the most generalisable lesson
-        from these memory items. Output only the lesson text — no title,
+        from this memory item. Output only the lesson text — no title,
         no header, no markdown formatting, no list, no explanation of
         what you are doing.\newline
         \newline\newline
-        Memory items:\newline
+        Memory item:\newline
         \{items\}
         \newline\newline
         Lesson:

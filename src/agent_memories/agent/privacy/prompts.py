@@ -70,21 +70,21 @@ GENERIC_ONE_PROMPT = """
      Memory: """
 
 GENERIC_PROMPT = (
-    "You will be given memory items distilled from one web-navigation "
+    "You will be given one memory item distilled from a web-navigation "
     "trajectory related to {label}. Produce a single short paragraph "
     "(1 to 3 sentences) that captures the most generalisable lesson "
-    "from these memory items. Output only the lesson text — no title, "
+    "from this memory item. Output only the lesson text — no title, "
     "no header, no markdown formatting, no list, no explanation of "
     "what you are doing.\n"
     "\n"
-    "Memory items:\n"
+    "Memory item:\n"
     "{items}\n"
     "\n"
     "Lesson:"
 )
 
 LABEL_PROMPT = (
-    "Return exactly {k} labels that summarise the memory items below.\n"
+    "Return exactly {k} labels that summarise the task query below.\n"
     "Each label must be 1–4 words and on a DISTINCT facet — no two labels\n"
     "may be synonyms, paraphrases, or describe the same aspect.\n"
     "Return only a JSON array of strings.\n"
@@ -93,7 +93,7 @@ LABEL_PROMPT = (
     "Example:\n"
     "{example}\n"
     "\n"
-    "Memory items:\n"
+    "Task query:\n"
     "{items}"
 )
 
