@@ -50,6 +50,17 @@ privacy cost.
 
 from __future__ import annotations
 
+import json
+
+EXAMPLE_LABELS = (
+    "pricing risk",
+    "customer churn",
+    "supply delay",
+    "budget pressure",
+    "staff training",
+    "data quality",
+)
+
 GENERIC_ONE_PROMPT = """
      [ User ]\n
      Here are agent trajectory memories with Label : {label} .\n
@@ -80,8 +91,7 @@ LABEL_PROMPT = (
     "No explanations, numbering, markdown, or extra text.\n"
     "\n"
     "Example:\n"
-    '["pricing risk", "customer churn", "supply delay", '
-    '"budget pressure", "staff training", "data quality"]\n'
+    "{example}\n"
     "\n"
     "Memory items:\n"
     "{items}"
@@ -111,5 +121,15 @@ def wrap_label(items: str = "(no examples)", *, k: int) -> str:
     in the same position in both branches so SVT format-token
     alignment is preserved. No ``label`` argument: round 1 produces
     the labels, it does not consume them.
+
+    The worked example is sliced from :data:`EXAMPLE_LABELS` to ``k``
+    entries so the demonstration never contradicts the "exactly ``k``"
+    instruction; a six-entry example against ``k = 3`` demonstrated
+    over-generation. Where ``k`` exceeds ``len(EXAMPLE_LABELS)`` the
+    full pool is shown, which under-demonstrates rather than
+    over-demonstrates. The slice depends only on ``k``, which is
+    identical in the public and private branches, so SVT format-token
+    alignment is unaffected.
     """
-    return LABEL_PROMPT.format(k=k, items=items)
+    example = json.dumps(list(EXAMPLE_LABELS[:k]))
+    return LABEL_PROMPT.format(k=k, items=items, example=example)

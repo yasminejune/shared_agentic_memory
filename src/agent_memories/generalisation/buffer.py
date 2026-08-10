@@ -16,10 +16,10 @@ caller's policy (from the user's design notes) is:
   added to a label with insufficient memories will be set aside").
 
 The carry-over set is persisted as JSONL alongside the per-user
-stores so the next trigger can re-feed it into the round-1 batch,
-making the round-1 expected batch size ``S = N_new + len(carry_over)``
-adaptive per WP2-plan §3.1 with the user-confirmed
-"`adaptive_redo_eps`" choice.
+stores. In the next trigger, these memories skip round 1 because
+they have already paid that privacy cost. They rejoin at round-2
+batch assignment and are assigned to whichever newly generated
+label has the highest cosine similarity.
 
 The X-gating itself is content-dependent ("did this label hit ``X``
 users this trigger?") and so leaks information about the per-label

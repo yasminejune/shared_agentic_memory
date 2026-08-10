@@ -1,0 +1,250 @@
+\chapter{Unanticipated difficulties and critical reflections}\label{ch:difficulties}
+This chapter sets out the biggest difficulties the author faced while working on this project, the pivots she undertook, and the critical reflections on them.
+
+\section{Unanticipated difficulties}
+
+\subsection{Generating usable text with the Amin et al. mechanism}\label{sec:difficulty-amin}
+
+Once the mechanism of \citet{amin2024private} had been replicated, it proved very hard to generate meaningful text at all. Run on the toy fixture with the paper's own hyperparameters, the output was gibberish, and some of it carried characters from non-Latin scripts. The examples in Figure~\ref{fig:amin_reproduction} are representative of what the mechanism produced at this stage.
+
+The tests that follow were run on the first instantiation of the mechanism, which generates the round-1 labels, rather than on the round-3 shared-memory content. The round-3 content could equally have served, but a label is one to four words long, so a bad label is obvious at a glance in a way that a bad paragraph is not. Table~\ref{tab:toy-fixture} holds the ten short event reviews used as the private corpus throughout this section, unless stated otherwise. They were chosen because a human reader can see immediately which label groups them correctly.
+
+\begin{table}[t]
+\centering
+\begin{tabular}{@{}cl@{}}
+\toprule
+\textbf{id} & \textbf{text} \\
+\midrule
+1  & I hated the event, terrible. \\
+2  & I had such a good time, incredible music. \\
+3  & I really enjoyed talking to everyone, really nice people. \\
+4  & Whenever I turned around, I had a new person to talk to, it was great. \\
+5  & Loved the food \\
+6  & Nice weather, good people \\
+7  & Never been there before and would give it a solid 8/10 \\
+8  & Good spaghetti at the end \\
+9  & Thought I'd hate it, but I actually didn't! \\
+10 & Would go again \\
+\bottomrule
+\end{tabular}
+\caption{The ten toy memories (\texttt{scripts/amin\_et\_al/examples.csv}) used as the private corpus for the diagnostics in Section~\ref{sec:difficulty-amin}.}
+\label{tab:toy-fixture}
+\end{table}
+
+Six possible causes were assessed in turn.
+
+\begin{itemize}
+
+\item \textbf{The base model rather than the instruction-tuned one.} The first model implemented was the Gemma 2 2B base model, which produced answers that were simply non-sensical. \citet{amin2024private} use Gemma 1.1 2B IT, so it was not clear which model of the newer generation would do best. The author therefore wrote a short script that put the two side by side on the same prompt, holding the clipping bound at $c = 20$, the token cap at 80, and the sampler fixed, and varying only the model and its prompt format: the chat template for the instruction-tuned model, raw completion for the base model. The instruction-tuned model was much the more succinct and appropriate of the two when asked to synthesise a summary memory from the toy data in Table~\ref{tab:toy-fixture}, as Figure~\ref{fig:gemma_comparison} shows. Given that it has been fine-tuned on chat conversations, this was not a surprise. The 9B and 27B models were also available, but Appendix A.2 of \citet{amin2024private} reports 75.7\%, 76.4\% and 76.9\% for Gemma 2 at 2B, 9B and 27B on four-shot DBPedia classification, so a thirteen-fold increase in parameters buys around one point. The author therefore stayed with the smaller and quicker model, \texttt{google/gemma-2-2b-it}.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.5\linewidth]{gemma_comparison.png}
+    \caption{Comparison of Gemma 2 and Gemma 2 IT model}
+    \label{fig:gemma_comparison}
+\end{figure}
+
+\item \textbf{An unoptimised label prompt.} The prompt had to be adapted rather than borrowed. The template in \citet{amin2024private} asks the model for another example like the ones it has been shown, whereas round 1 of this thesis asks for a label under which a set of memories can be grouped. Five variants were compared, differing only in the instruction prose, with the private corpus, the parser and the private-token budget held fixed. Table~\ref{tab:label-prompt-comparison} gives the labels each returned. From a subjective review, \texttt{json\_discriminative} was the best of the five: it grouped the data in Table~\ref{tab:toy-fixture} most accurately and produced the most distinct labels. It was promoted into the final pipeline as the production \texttt{LABEL\_PROMPT}, shown in Table~\ref{tab:label-prompt}.\footnote{This check ran at a target $\varepsilon$ of 200.0 and $\delta = 0.01$. The private-token budget $r$ hit its cap of 80 before the target was reached, so the realised budget was $(\varepsilon, \delta) = (26.2, 0.01)$. The ten toy examples were duplicated ten times each, giving a batch of 100, so that $r$ would stretch to a label of reasonable length.}
+
+The comparison also shows what the anti-redundancy clause is doing. Asking for distinct facets on its own (\texttt{json\_discriminative}) yields three usable labels; adding the requirement that one of them must summarise the batch (\texttt{json\_discriminative\_one}) breaks the JSON format entirely, and every slot falls back to a placeholder.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabularx}{\textwidth}{@{}lXl@{}}
+\toprule
+\textbf{Variant} & \textbf{Instruction, where it differs} & \textbf{Labels returned} \\
+\midrule
+\texttt{json\_array} & Return exactly $k$ labels. & expert choice; delighted staff; creative minds \\
+\addlinespace
+\texttt{json\_one\_array} & \dots one of which needs to summarise the memory items below. & Pleasant experience; Good quality; Happy memory \\
+\addlinespace
+\texttt{json\_discriminative} & \dots that summarise the memory items below. Each label \dots on a DISTINCT facet — no two labels may be synonyms, paraphrases, or describe the same aspect. & Positive Experience; Good Feedback; Pleasant Interactions \\
+\addlinespace
+\texttt{json\_discriminative\_one} & \dots one of which needs to summarise \dots plus the DISTINCT facet clause. & unparseable output; all three slots filled by placeholder \\
+\addlinespace
+\texttt{json\_specific} & \dots one of which must reflect the memory item below. & positive experience; good quality; impressed with \\
+\bottomrule
+\end{tabularx}
+\caption{Round-1 label prompts compared on the toy fixture at a realised $(\varepsilon, \delta) = (26.2, 0.01)$, $k = 3$, $r = 80$. Every variant returns a JSON array of strings, is parsed by the same three-stage parser, and spends the same private-token budget; only the instruction prose differs. \texttt{json\_discriminative} was promoted into the pipeline.}
+\label{tab:label-prompt-comparison}
+\end{table}
+
+\item \textbf{Generating the labels in one sequence rather than one at a time.} Algorithm 1 of \citet{amin2024private} resets the token sequence to empty before each new synthetic example, so every example is generated independently from the same batch of prompts and nothing generated earlier enters the context of what follows. This thesis departs from that: it asks for all $k$ labels inside a single JSON array, so each label is conditioned on the ones already emitted. The two were compared directly, holding the corpus, the hyperparameters and the private-token budget fixed. Table~\ref{tab:label-mode-comparison} gives the result. The paper-faithful sequential mode produced the same label twice, whereas the concatenated mode produced three distinct ones, and the deviation was kept.
+
+The intuition as to why concatenation helps is that each memory pushes the next token towards its own preferred direction. Once a token has been committed to the array, the memories that wanted it no longer have a strong preference for any particular continuation, while the memories that have not yet been served still do. Their spike in the logits can then overpower the flat average of generically likely tokens, which carry no context. Generating each label from an empty sequence removes that mechanism, and the batch simply converges on its single strongest preference every time.\footnote{This check ran at the same realised $(\varepsilon, \delta) = (26.2, 0.01)$ and on the same duplicated batch of 100 as the prompt comparison above.}
+
+\begin{table}[t]
+\centering
+\begin{tabular}{@{}llll@{}}
+\toprule
+\textbf{Mode} & \textbf{Label 1} & \textbf{Label 2} & \textbf{Label 3} \\
+\midrule
+Concatenated array (this thesis) & Positive experience & Pleasant experience & Good quality \\
+Sequential, one label per sequence \citep{amin2024private} & Positive Experience & Great experience & Great experience \\
+\bottomrule
+\end{tabular}
+\caption{Labels produced by the two generation modes on the toy fixture at a realised $(\varepsilon, \delta) = (26.2, 0.01)$, $k = 3$, $r = 80$.}
+\label{tab:label-mode-comparison}
+\end{table}
+
+\item \textbf{An implementation error.} None of the changes above produced useful labels at a defensible privacy budget. Every check reported so far ran at a realised $\varepsilon$ of 26.2, which is far outside anything meaningful in practice, whereas \citet{amin2024private} report usable synthetic text at $\varepsilon = 1$ with $\delta$ set to the inverse of the sensitive dataset's size. Since the paper's implementation is closed-source, the only way to test whether the fault lay in this thesis' code was to reproduce the paper's own experiment. The author therefore ran the mechanism on TREC, one of the classification datasets in the paper, at the paper's published hyperparameters: batch size $s = 500$, clipping bound $c = 10$, private temperature $\tau = 1.5$, SVT threshold $\theta = 0.3$ and noise scale $\sigma = 0.1$, at $\varepsilon = 1$ and $\delta = 1/n$, which solved to a budget of 31 private tokens. The synthetic questions this produced were not usable either, as Figure~\ref{fig:amin_reproduction} shows. The failure therefore reproduces on the paper's own dataset at the paper's own settings, which points away from a defect specific to this thesis' code and towards the mechanism's behaviour at the scale available here.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.5\linewidth]{amin_reproduction.png}
+    \caption{View of first two memories generated with the Amin et Al. mechanism using the TREC dataset.}
+    \label{fig:amin_reproduction}
+\end{figure}
+
+\item \textbf{Too tight a clipping bound.} A fifth consideration was that clipping might be squashing the per-memory distributions together, so that the sampled token reflected whatever was generically likely rather than anything the prompt had asked for. To assess this, the author compared the token logits before and after clipping. Figure~\ref{fig:token_logit_heights} shows that even at $c = 10$ the highest-ranked tokens stay comparatively high. This is not evident from the overall chart, but the zoom makes it clear: the clipping used by \citet{amin2024private} leaves the top of the distribution where it is and lifts only the bottom, so the top-ranking preferences of each memory survive. Clipping is therefore not what degrades the output.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.5\linewidth]{all_token_logit_heights_with_zoom.png}
+    \caption{Token logit heights}
+    \label{fig:token_logit_heights}
+\end{figure}
+
+A second diagnostic on the same question is more informative about what is going wrong. For each of the ten toy memories, the author extracted the private logit vector at the second generated token, clipped it at $c = 50$, $20$ and $10$, and took the head of the ranked curve above its largest early drop. The head is small, between one and twelve tokens, and it is identical at all three bounds: the same memory returns the same top token whether it is clipped at 10 or at 50. What the heads do not do is agree with one another. The ten top tokens are \textit{``negative''}, \textit{``music''}, \textit{``positive''}, \textit{``New''}, \textit{``positive''}, \textit{``positive''}, \textit{``Positive''}, \textit{``delicious''}, \textit{``Unexpected''} and \textit{``positive''} — five variants of one word and five unrelated ones. Averaging over a batch can only preserve a token that several members support, so with heads this narrow and this divergent there is little for the average to carry. That is a property of the corpus rather than of the clipping bound, and it is the same argument that motivates grouping memories by label before synthesis in Section~\ref{sec:system architecture}.
+
+\item \textbf{Replacing the mechanism for the bucketing step.} The last consideration was to keep the mechanism of \citet{amin2024private} for the shared-memory synthesis alone and to bucket the memories by some other method. Five methods were compared on the same 100 memories at the same $k = 4$: the mechanism with its privacy machinery stripped out, the mechanism as deployed, spherical $k$-means over the project's own sentence embeddings, BERTopic with its dimensionality reduction disabled and its clusterer replaced by the same $k$-means, and BERTopic at its own defaults. Table~\ref{tab:clustering-comparison} gives the labels each produced. The two conventional clustering methods partition the corpus, but neither names its partitions in a way a retrieval step could use: $k$-means can only return the memory nearest each centroid, and BERTopic's c-TF-IDF returns stopwords. Only the two mechanism variants produce labels that read as topics. Set against that, and against the simplicity the mechanism offers in accounting for the privacy budget, the author decided to keep it for both steps.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabularx}{\textwidth}{@{}lXl@{}}
+\toprule
+\textbf{Method} & \textbf{Labels} & \textbf{Cluster sizes} \\
+\midrule
+Mechanism, privacy stripped & Personal Interests; Contact Information; Job \& Education; Personal Experiences & 69, 3, 10, 18 \\
+\addlinespace
+Mechanism, as deployed & personal interests; topical discussions; occupational details; future plans & 14, 76, 4, 6 \\
+\addlinespace
+Spherical $k$-means & nearest memory to each centroid, truncated to four words & 19, 41, 9, 31 \\
+\addlinespace
+BERTopic, $k$-means clusterer & you do my to; to you the it; the it you of; to you the that & 41, 31, 19, 9 \\
+\addlinespace
+BERTopic, own defaults & you to my do; it you the to; outliers (HDBSCAN) & 25, 10, 65 \\
+\bottomrule
+\end{tabularx}
+\caption{Five bucketing methods on the same 100 memories at $k = 4$. The mechanism as deployed ran at a realised $\varepsilon$ of 10.9 with $\delta = 0.01$ and $r = 80$. BERTopic at its own defaults chose three clusters rather than four and assigned 65 of the 100 memories to an outlier bucket.}
+\label{tab:clustering-comparison}
+\end{table}
+
+\end{itemize}
+
+\subsection{Hosting the WebArena benchmark}
+
+The evaluation could either run on a cloud provider's servers or on the author's own laptop. The WebArena repository recommends AWS, and the reason for the recommendation is likely the sheer size of the configurations, which ship as Docker images of full websites. Following that recommendation would have required, according to the documentation, an EC2 instance of at least \texttt{t3a.xlarge} with 1\,TB of storage, at an approximate cost of \pounds 50 for a single pass-through of the 812 tasks. The project was not funded, the design calls for several pass-throughs, and the \pounds 100 of student credit available would not have covered them.
+
+The evaluation therefore had to run locally, and the laptop, although fairly empty, did not have the storage to download the configurations and boot the Docker images. After the available space had been maximised, the remaining solution was to borrow a 2\,TB external disk from the author's supervisor, which was sufficient and allowed the project to move forward.
+
+\subsection{A low success rate on WebArena}\label{sec:difficulty-success-rate}
+
+The first pass-through, without memories, succeeded on 59 of the 812 tasks, a success rate of 7.27\%. This is remarkably low. The largest single reason is the agent model. \citet{ouyang2025reasoningbank} run ReasoningBank on Gemini-2.5-flash, Gemini-2.5-pro and Claude-3.7-sonnet, whereas the constraints set out in Section~\ref{sec:tech-stack} put this thesis on Qwen3.5 at 4 billion parameters. Even against that reference, though, the gap is large: \citet{lu2026distillation} report the same model at 24.1\% on the full 812 tasks without fine-tuning. The author therefore looked for defects in the harness rather than accepting the number.
+
+\begin{itemize}
+
+\item \textbf{The evaluator's LLM judge.} WebArena scores a task with up to three evaluators, and one of them, \texttt{string\_match}, compares the agent's answer against a reference. Where the reference is marked as a fuzzy match, the comparison is delegated to an LLM judge, which the harness hard-codes to OpenAI's \texttt{gpt-4-1106-preview}. 118 of the 812 tasks route through that judge: 82 through \texttt{llm\_fuzzy\_match} against a reference answer, and 36 through \texttt{llm\_ua\_match} against the note attached to a deliberately unachievable task. Without an API key those tasks cannot be scored, and the author added her key for the OpenAI assessments.
+% TODO(Yasmine): two things to reconcile before submission.
+% (1) .env in the repo has no OPENAI_API_KEY, yet all 812 rows of
+%     data/webarena/trajectories_0.csv carry run_status='ok'. Confirm whether
+%     the key was exported into the shell on the A30 cluster at run time.
+% (2) The re-run success rate is not yet in data/webarena/. Fill the figure below.
+\textbf{[INTERIM: re-run success rate to be inserted.]}
+
+\item \textbf{An action grammar that never asked for the answer.} The system prompt gave the agent the BrowserGym action set but did not tell it to call \texttt{send\_msg\_to\_user} once it believed the task was done. 335 of the 812 tasks are scored on the answer string, and on those an agent that solves the task but never reports its answer scores zero.\footnote{The remaining 477 tasks are scored on the final URL or on the page state, and can succeed without an answer string. The prompt therefore does not affect them.} Table~\ref{tab:failure-endings} breaks the 753 failed trajectories down by how they ended, and the vast majority never issued the action at all.
+
+\begin{table}[t]
+\centering
+\begin{tabular}{@{}lrr@{}}
+\toprule
+\textbf{Ending} & \textbf{Count} & \textbf{\% of failures} \\
+\midrule
+Terminated without \texttt{send\_msg\_to\_user} (ran out, stuck, or errored mid-task) & 620 & 82.3\% \\
+\texttt{report\_infeasible(\dots)} & 74 & 9.8\% \\
+\texttt{send\_msg\_to\_user(\dots)} but wrong & 59 & 7.8\% \\
+\midrule
+Total & 753 & 100\% \\
+\bottomrule
+\end{tabular}
+\caption{How the 753 failed trajectories of the no-memory pass-through ended.}
+\label{tab:failure-endings}
+\end{table}
+
+Two readings of that first row are consistent with the data. Either the agent was not capable enough and looped or stalled until the 30-step cap terminated it, or it considered the task complete and simply never reported. The corrected prompt was intended to separate them.
+% TODO(Yasmine): insert the success rate from the re-run with the corrected prompt.
+\textbf{[INTERIM: results of the corrected prompt to be inserted.]}
+
+\end{itemize}
+
+\subsection{Memory injection breaking the action grammar}\label{sec:difficulty-parse}
+
+The pass-through with private memories returned 57 successes against the no-memory baseline's 59. Read on its own, that number says memory injection made the agent slightly worse. It does not. Paired across all 812 tasks, 18 tasks went from success to failure and 16 went the other way, and an exact McNemar test on those 34 discordant pairs gives $p = 0.86$. The harness's own run-to-run variation is wider than the difference being measured, so there is no effect here to explain.
+
+What the flat headline conceals is a defect in the memory arm that is neither small nor within noise. Across the two runs, the share of Think steps whose reply the action parser rejected rose from 114 of 7,950 in the baseline, or 1.4\%, to 3,273 of 8,534 with memories, or 38.4\%. 2,358 of those rejected replies open with a Markdown code fence, against 14 in the baseline, and 2,135 of them would have parsed and executed unchanged had the fence been stripped.
+
+The cause is a contradiction between two instructions the agent receives in the same prompt. The system prompt asks for exactly one line holding a single function call and no commentary. The memory-injection instruction, reproduced verbatim from \citet{ouyang2025reasoningbank}, asks the agent to first explicitly discuss whether it wants to use each memory item and then take action. The memory block is appended after the system prompt and before the observation, so it sits closer to the model's recent context, and the model resolves the conflict by wrapping its reply in a fenced block. The parser rejects any reply it cannot read as a single call, and the run continues one wasted step poorer. The stuck detector then compounds it: a rejected reply is written into the trajectory as the step's thought, and five identical fenced replies trip the abort, which is why stuck terminations rose from 362 to 525.
+
+The damage lands precisely where it is most costly. On 111 tasks the agent produced a valid terminal \texttt{send\_msg\_to\_user} or \texttt{report\_infeasible} inside a fence and the parser discarded it, against 4 such tasks in the baseline. Seven of those 111 are tasks the no-memory pass-through had solved. The honest reading is therefore not that memories failed to help, but that the memory arm as run cannot answer the question, because a formatting defect gates it before the memories reach the action. The fix is small — strip the fence in the parser, or drop the discussion clause from the injected instruction — and the pass-through has to be repeated before the comparison means anything.
+
+There is a second lesson in this, beyond the bug. The instruction was reproduced verbatim precisely so that prompt wording would stay fixed as an experimental control, as set out in Section~\ref{sec:private memory creation experiment}. That decision was right in isolation and wrong in combination: an instruction written for an agent that reasons in the open cannot be dropped unchanged into an agent whose reply grammar is a single line and whose reasoning trace has been disabled.
+
+\subsection{Revising the hypotheses and experimental scenarios}
+
+The hypotheses and experimental scenarios set out in the proposal are not the ones this thesis reports against. The reason for the switch is two-fold. Firstly, a simpler design proves the concept more cleanly than one that is closer to reality but more convoluted, and research results should be easy to read. Second, the original design would have required far more pass-throughs, each of which takes several hours; between the time available and the number of blockers described above, it was not feasible.
+
+The substantive change is that the 812 tasks are no longer treated as belonging to separate users accruing shared memories within a single pass-through. Instead, the same 812 tasks are run twice: once to generate the memories, and once to use them. Tables~\ref{tab:hypotheses-revision} and~\ref{tab:scenario-revision} set the two designs side by side.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabularx}{\textwidth}{@{}XX@{}}
+\toprule
+\textbf{Proposal} & \textbf{This thesis} \\
+\midrule
+\textbf{H1 — Improvement over baseline.} Does the shared memory tier improve agent task success rate over a private-memory-only baseline? &
+\textbf{H1.} A shared memory tier distilled from other users' trajectories raises task success rate above a no-memory baseline. The claim fails if the cross-user condition does not statistically improve on the no-memory condition. \\
+\addlinespace
+\textbf{H2 — Privacy guarantee.} Does the \citet{amin2024private} privacy mechanism, applied to the generalisation pipeline, preserve a meaningful fraction of that improvement at a given $(\varepsilon, \delta)$? &
+\textbf{H2.} That gain survives the privacy mechanism. At $\varepsilon \leq 5$, success rate under the differentially private shared tier sits closer to the unrestricted-sharing condition than to the no-memory condition. The claim fails if the private tier recovers less than half the distance between them. \\
+\bottomrule
+\end{tabularx}
+\caption{The hypotheses as proposed and as revised. The revision changes the baseline of H1 from private-memory-only to no-memory, and replaces ``a meaningful fraction'' in H2 with a stated budget and an explicit failure condition.}
+\label{tab:hypotheses-revision}
+\end{table}
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabularx}{\textwidth}{@{}XX@{}}
+\toprule
+\textbf{Proposal} & \textbf{This thesis} \\
+\midrule
+\textbf{A — No memory baseline.} Each task executed by an independent agent with no memory store. Lower bound: no within-user learning, no cross-user sharing. &
+\textbf{A — No memory use.} The agent runs without private or shared memories. Its trajectories generate the memories all later pass-throughs consume. \\
+\addlinespace
+\textbf{B — Unrestricted memory.} Ten agents execute the 812 tasks assigned at random, accumulating episodic memories throughout, each with access to every user's private memories and to all shared memories. Upper bound if privacy were not a concern. &
+\textbf{B — Private memory use only.} All memories from pass-through A are treated as one user's. The agent retrieves the top three private memories, including the memory distilled from the identical task. \\
+\addlinespace
+\textbf{C — Cross-user learning.} Ten simulated users spread across the 190 task clusters, at most one task per cluster each, so no user meets the same task type twice. Any gain over A is cross-user transfer. &
+\textbf{C — Shared memories only.} The shared mechanism runs over the private memories from pass-through A. The agent retrieves from the shared store alone. \\
+\addlinespace
+\textbf{D — Within-user learning.} Ten simulated users, each assigned whole clusters, so no cross-user sharing occurs. Any gain over A is within-user learning from repeated exposure. &
+\textbf{D — Private and shared memories.} The agent retrieves from both stores. This is the complete architecture of Section~\ref{sec:system architecture}. \\
+\bottomrule
+\end{tabularx}
+\caption{The experimental scenarios as proposed and as revised. The proposal simulated ten users inside one pass-through; the revision runs the same 812 tasks twice and varies which memory store the second run may read.}
+\label{tab:scenario-revision}
+\end{table}
+
+The obvious cost of the revision is that the evaluations no longer speak to whether a shared memory generalises beyond the trajectories it was distilled from. A shared memory is now always applied to tasks the earlier pass-through has already seen, so it may well generalise, but nothing here tests it. What the revised design does show is narrower and still worth having: where users have taken an action on this system in the past, a new user can benefit from what was learnt, through the shared tier.
+
+\section{Critical reflections}
+
+This thesis has illustrated to the author that AI research is never finished. There is always an additional angle from which to see the problem, and always another parameter worth tweaking. The real work of an AI researcher, from this author's perspective, is therefore prioritising between a long list of possible fixes.
+
+The testing reported in this chapter was not empirical. Each comparison was judged subjectively, on a small fixture, by one reader. Testing the prompts, then the shared memories they produce, then the 812 agent trajectories that consume them would have given far more robust results, but the time did not allow for it. Subjective assessment was the stand-in, and it was still preferred over not testing at all.
+
+The defect described in Section~\ref{sec:difficulty-parse} is the sharper version of the same lesson. It was found only because a headline number that looked like a small negative effect was checked against the trajectories underneath it, and the check showed both that the effect was noise and that a much larger problem sat beneath it. Where a subjective judgement on ten toy memories is the best a schedule allows, the number it produces has to be treated as provisional, and the first thing to do with any result is to ask what it would look like if the harness, rather than the hypothesis, were what the data was measuring.
