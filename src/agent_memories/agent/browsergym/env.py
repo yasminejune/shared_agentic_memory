@@ -2,14 +2,102 @@
 
 from __future__ import annotations
 
+import inspect
+from collections.abc import Callable
 from typing import Any
 
 import gymnasium as gym
+from browsergym.core.action import utils as action_utils
+from browsergym.core.action.functions import (
+    click,
+    fill,
+    go_back,
+    hover,
+    keyboard_press,
+    new_tab,
+    noop,
+    report_infeasible,
+    scroll,
+    select_option,
+    send_msg_to_user,
+    tab_close,
+    tab_focus,
+)
 from browsergym.core.action.highlevel import HighLevelActionSet
+from browsergym.core.action.parsers import highlevel_action_parser
 
+from .navigation import go_home, goto
 from .observation import preprocess_obs
 
-WEBARENA_ACTION_SET = HighLevelActionSet(subsets=["webarena"], multiaction=False)
+# Stock webarena subset minus goto / go_forward, plus sandboxed goto and go_home.
+# noop is always allowed by BrowserGym and is included here for the executable mapping.
+_WEBARENA_ACTIONS: list[Callable] = [
+    noop,
+    scroll,
+    keyboard_press,
+    click,
+    fill,
+    hover,
+    tab_focus,
+    new_tab,
+    go_back,
+    tab_close,
+    select_option,
+    send_msg_to_user,
+    report_infeasible,
+    goto,
+    go_home,
+]
+
+WEBARENA_ACTION_SET = HighLevelActionSet(
+    subsets=["custom"],
+    custom_actions=[fn for fn in _WEBARENA_ACTIONS if fn is not noop],
+    multiaction=False,
+    demo_mode="off",
+)
+
+
+def _build_python_includes() -> str:
+    """Assemble executable action helpers without BrowserGym's broken indent."""
+    parts = [
+        "import playwright.sync_api\n",
+        "from typing import Literal\n\n\n",
+        "demo_mode='off'\n",
+        "retry_with_force=False\n\n",
+    ]
+    for _, func in inspect.getmembers(action_utils, inspect.isfunction):
+        parts.append(inspect.getsource(func))
+        parts.append("\n\n")
+    for func in _WEBARENA_ACTIONS:
+        parts.append(inspect.getsource(func))
+        parts.append("\n\n")
+    return "".join(parts)
+
+
+_PYTHON_INCLUDES = _build_python_includes()
+
+
+def webarena_action_to_python(action: str) -> str:
+    """Map a high-level action string to executable Python for BrowserGym.
+
+    Reimplements :meth:`HighLevelActionSet.to_python_code` with correctly
+    indented includes. The installed ``browsergym-core`` 0.13.3 wheel embeds
+    leading whitespace in its ``python_includes`` f-strings, which makes
+    ``exec`` raise ``IndentationError`` for every action.
+    """
+    function_calls = highlevel_action_parser.search_string(action)
+    function_calls = sum(function_calls.as_list(), [])
+    if not function_calls:
+        raise ValueError("Received an empty action.")
+    if len(function_calls) > 1:
+        raise ValueError("Received a multi-action, only single-actions are allowed.")
+
+    function_name, function_args = function_calls[0]
+    if function_name not in WEBARENA_ACTION_SET.action_set:
+        raise NameError(f"Invalid action type '{function_name}'.")
+
+    call = function_name + "(" + ", ".join([repr(arg) for arg in function_args]) + ")\n"
+    return _PYTHON_INCLUDES + call
 
 
 def build_think_system_prompt(action_set: HighLevelActionSet) -> str:
@@ -36,7 +124,7 @@ def make_webarena_env(task_id: int, *, headless: bool = True) -> gym.Env:
         f"browsergym/webarena.{task_id}",
         headless=headless,
         slow_mo=0,
-        action_mapping=WEBARENA_ACTION_SET.to_python_code,
+        action_mapping=webarena_action_to_python,
     )
 
 

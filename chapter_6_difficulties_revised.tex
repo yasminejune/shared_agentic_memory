@@ -154,28 +154,31 @@ The first pass-through, without memories, succeeded on 59 of the 812 tasks, a su
 % (2) The re-run success rate is not yet in data/webarena/. Fill the figure below.
 \textbf{[INTERIM: re-run success rate to be inserted.]}
 
-\item \textbf{An action grammar that never asked for the answer.} The system prompt gave the agent the BrowserGym action set but did not tell it to call \texttt{send\_msg\_to\_user} once it believed the task was done. 335 of the 812 tasks are scored on the answer string, and on those an agent that solves the task but never reports its answer scores zero.\footnote{The remaining 477 tasks are scored on the final URL or on the page state, and can succeed without an answer string. The prompt therefore does not affect them.} Table~\ref{tab:failure-endings} breaks the 753 failed trajectories down by how they ended, and the vast majority never issued the action at all.
+\item \textbf{An action grammar that never asked for the answer.} The system prompt gave the agent the BrowserGym action set but did not tell it to call \texttt{send\_msg\_to\_user} once it believed the task was done. 335 of the 812 tasks are scored on the answer string, and on those an agent that solves the task but never reports its answer scores zero.\footnote{The remaining 477 tasks are scored on the final URL or on the page state, and can succeed without an answer string. The prompt therefore does not affect them.} Table~\ref{tab:failure-endings} breaks the 753 failed trajectories down by how they ended.
 
 \begin{table}[t]
 \centering
-\begin{tabular}{@{}lrr@{}}
+\begin{tabular}{@{}lrrr@{}}
 \toprule
-\textbf{Ending} & \textbf{Count} & \textbf{\% of failures} \\
+\textbf{Ending} & \textbf{Count} & \textbf{\% of failures} & \textbf{Answer / state} \\
 \midrule
-Terminated without \texttt{send\_msg\_to\_user} (ran out, stuck, or errored mid-task) & 620 & 82.3\% \\
-\texttt{report\_infeasible(\dots)} & 74 & 9.8\% \\
-\texttt{send\_msg\_to\_user(\dots)} but wrong & 59 & 7.8\% \\
+Stuck detector: five identical replies & 359 & 47.7\% & 201 / 158 \\
+Killed by the unauthorised-URL safeguard (left the instance) & 166 & 22.0\% & 30 / 136 \\
+\texttt{report\_infeasible(\dots)} & 74 & 9.8\% & 31 / 43 \\
+Exhausted the 30-step budget & 61 & 8.1\% & 16 / 45 \\
+\texttt{send\_msg\_to\_user(\dots)} but wrong & 59 & 7.8\% & 39 / 20 \\
+Browser or navigation error & 32 & 4.2\% & 6 / 26 \\
+Other early termination & 2 & 0.3\% & 0 / 2 \\
 \midrule
-Total & 753 & 100\% \\
-\bottomrule
+Total & 753 & 100\% & 323 / 430 \\
 \end{tabular}
-\caption{How the 753 failed trajectories of the no-memory pass-through ended.}
+\caption{How the 753 failed trajectories of the no-memory pass-through ended. The last column splits each row by whether WebArena scores the task on an answer string (335 tasks) or on URL / page state (477 tasks). The previous aggregate of 620 ``terminated without \texttt{send\_msg\_to\_user}'' is the sum of the stuck, off-instance, step-budget, browser-error and other rows.}
 \label{tab:failure-endings}
 \end{table}
 
-Two readings of that first row are consistent with the data. Either the agent was not capable enough and looped or stalled until the 30-step cap terminated it, or it considered the task complete and simply never reported. The corrected prompt was intended to separate them.
-% TODO(Yasmine): insert the success rate from the re-run with the corrected prompt.
-\textbf{[INTERIM: results of the corrected prompt to be inserted.]}
+The coarsest reading of the old aggregate was that the agent either stalled until the step cap or solved the task and never reported. The finer taxonomy resolves that in favour of capability, with a more specific culprit than model size alone. Nearly half of the failures are the stuck detector firing on five identical replies, and a further 166~(22\%) are killed because the agent left the sandboxed instance: BrowserGym terminates any task whose open tabs leave the authorised WebArena hosts, and 154 of those 166 deaths were a \texttt{goto} to a public domain such as \texttt{www.reddit.com} or \texttt{www.amazon.com}. The original WebArena harness silently rewrites those public domains back onto the local clone; BrowserGym never ported that translation layer. The navigation fix that closes \texttt{goto} under the instance, adds \texttt{go\_home}, and drops the never-productive \texttt{go\_forward} is intended to remove that harness-interaction failure so that remaining errors are attributable to the agent.
+% TODO(Yasmine): insert the success rate from the re-run with the corrected prompt and navigation sandbox.
+\textbf{[INTERIM: results of the corrected prompt / navigation sandbox to be inserted.]}
 
 \end{itemize}
 

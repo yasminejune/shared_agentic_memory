@@ -47,6 +47,11 @@ Full corpus (812 tasks, multi-day):
   python scripts/webarena/run_webarena.py
   python scripts/webarena/build_memories_from_trajectories.py
 
+Navigation-sandbox re-run (keeps trajectories_0.csv as the paired baseline):
+
+  python scripts/webarena/run_webarena.py \
+    --csv-path data/webarena/trajectories_0_navfix.csv
+
 Resume: each script skips task_ids already completed in its own output CSV.
 
 ## 5. Reset cadence
