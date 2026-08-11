@@ -74,7 +74,7 @@ from agent_memories.memory.store import _cosine_top_k
 from agent_memories.services.ollama_client import OllamaClient
 from agent_memories.types import ChatClient
 
-DEFAULT_K = 1
+DEFAULT_K = 3
 
 
 def _build_client() -> ChatClient:
