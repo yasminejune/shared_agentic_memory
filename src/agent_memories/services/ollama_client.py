@@ -1,13 +1,13 @@
-"""Native Ollama chat wrapper for the WP1.3 Think node.
+"""Native Ollama chat wrapper for the Think node and short structured calls.
 
-Posts directly to Ollama's ``/api/chat`` endpoint. The bridge silently
-drops the ``think: false`` field, so thinking-capable models like
-Qwen3 always emit a ``<think>...</think>`` reasoning block and we
-have to size ``max_tokens`` for the reasoning trace rather than for
-the short grammar line we actually want. Talking to ``/api/chat``
-directly lets us pass ``think: false`` and stay at ``num_predict: 64``
--- one short grammar line, no wasted reasoning tokens, ~0.5 s per
-call instead of tens of seconds.
+Posts directly to Ollama's ``/api/chat`` endpoint so the ``think`` field is
+honoured (the OpenAI-compatible bridge silently drops it). Thinking is off
+by default: the judge, extractor and label post-processing are short
+structured replies that must not spend their ``num_predict`` budget on a
+reasoning trace. The WebArena agent runners construct the client with
+``think=True`` and raise ``num_predict`` so the trace and the action line
+both fit. When thinking is on, ``message.thinking`` holds the trace and
+``message.content`` holds the answer; ``chat`` returns ``content`` only.
 
 The class satisfies the ``ChatClient`` Protocol defined in
 ``agent_memories.types`` so it is interchangeable with
@@ -47,11 +47,13 @@ class OllamaClient:
         base_url: str = DEFAULT_BASE_URL,
         request_timeout: float = DEFAULT_REQUEST_TIMEOUT_SECONDS,
         num_predict: int = DEFAULT_NUM_PREDICT,
+        think: bool = False,
     ) -> None:
         self.model = model
         self.base_url = base_url.rstrip("/")
         self.request_timeout = request_timeout
         self.num_predict = num_predict
+        self.think = think
         self._http = httpx.Client(timeout=request_timeout)
 
     def chat(
@@ -65,8 +67,9 @@ class OllamaClient:
         """Send a single system+user turn and return the assistant text.
 
         ``max_tokens`` overrides the constructor's ``num_predict`` for
-        a single call; the Think node leaves it at ``None`` (64-token
-        cap), the WP1.6 pipeline raises it for the judge and extractor.
+        a single call. When ``think`` is True, ``num_predict`` must cover
+        the reasoning trace and the answer together; ``message.thinking``
+        is discarded and only ``message.content`` is returned.
 
         Any ``httpx.HTTPStatusError`` (e.g. 404 for an unpulled model)
         or ``httpx.TimeoutException`` propagates so the Think node
@@ -79,7 +82,7 @@ class OllamaClient:
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-            "think": False,
+            "think": self.think,
             "stream": False,
             "options": {
                 "temperature": temperature,

@@ -69,3 +69,23 @@ Memories: data/webarena/trajectories_memories.csv (gitignored).
 judge_outcome and harness_success are independent columns:
 - judge_outcome: ReasoningBank LLM-as-Judge on the trajectory
 - harness_success: WebArena eval harness (reward > 0 via BrowserGym)
+
+## 7. Deferred LLM judge (two-phase scoring)
+
+118 of 812 tasks use an LLM judge (fuzzy_match / ua_match). The judge
+is deferred: during the browser run it returns 1.0 and records its
+inputs to a sidecar JSONL file. harness_reward in the trajectories CSV
+is therefore the deterministic factor only; judge_pending=True marks
+rows whose reward is provisional.
+
+Step C — score the deferred judge calls with Mistral:
+
+  python scripts/webarena/score_deferred_judge.py \
+    --calls data/webarena/trajectories_1_judge_calls.jsonl
+
+The scorer is resumable: re-running retries failed/unparseable tasks
+and skips already-scored ones. Output: <stem>_judge_scores.csv with
+final_reward = harness_reward * judge_product.
+
+The pinned judge model is mistral-large-2512 (overridable via --model).
+MISTRAL_API_KEY must be set in .env or the environment.

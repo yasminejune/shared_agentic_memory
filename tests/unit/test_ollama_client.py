@@ -58,6 +58,45 @@ def test_chat_returns_completion_on_success() -> None:
 
 
 @pytest.mark.unit
+def test_think_true_is_sent_in_payload() -> None:
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["json"] = json.loads(request.content)
+        return httpx.Response(
+            200,
+            json={"message": {"role": "assistant", "content": "click('53')"}},
+        )
+
+    client = OllamaClient(model="qwen3:8b", think=True)
+    client._http.close()
+    client._http = httpx.Client(transport=httpx.MockTransport(handler))
+
+    client.chat("sys", "usr")
+
+    assert captured["json"]["think"] is True
+
+
+@pytest.mark.unit
+def test_chat_ignores_thinking_field_and_returns_content() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "message": {
+                    "role": "assistant",
+                    "thinking": "I should click the search button.",
+                    "content": "click('53')",
+                }
+            },
+        )
+
+    client = _make_client_with_mock(handler)
+
+    assert client.chat("sys", "usr") == "click('53')"
+
+
+@pytest.mark.unit
 def test_chat_returns_empty_string_when_content_missing() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"message": {"role": "assistant"}})

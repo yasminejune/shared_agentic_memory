@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import re
 
 from .env import WEBARENA_ACTION_SET
 
@@ -12,6 +13,42 @@ class ActionParseError(ValueError):
 
 
 _ALLOWED_FUNCTIONS = frozenset(WEBARENA_ACTION_SET.action_set.keys())
+
+# Native thinking usually arrives in message.thinking, but some model /
+# Ollama combinations leak a <think> block into content. Drop both the
+# closed and the unterminated form (budget ran out mid-trace).
+_THINK_BLOCK_RE = re.compile(r"<think>.*?(?:</think>|$)", re.DOTALL | re.IGNORECASE)
+
+
+def extract_action_line(reply: str) -> str:
+    """Pull a single BrowserGym action line out of a talkative reply.
+
+    Order: drop a leaked ``<think>`` block, strip Markdown fence marker
+    lines, then return the last remaining line that validates as an
+    allowed call. If none validate, return the stripped text so
+    :func:`parse_action` raises with the same shape of error as today.
+    """
+    if reply is None:
+        return ""
+    text = _THINK_BLOCK_RE.sub("", reply).strip()
+    text = _strip_markdown_fence_lines(text).strip()
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    for line in reversed(lines):
+        try:
+            return parse_action(line)
+        except ActionParseError:
+            continue
+    return text
+
+
+def _strip_markdown_fence_lines(text: str) -> str:
+    """Drop lines that are only a Markdown fence opener or closer."""
+    kept: list[str] = []
+    for line in text.splitlines():
+        if line.strip().startswith("```"):
+            continue
+        kept.append(line)
+    return "\n".join(kept)
 
 
 def parse_action(line: str) -> str:

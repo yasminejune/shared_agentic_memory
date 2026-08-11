@@ -57,6 +57,7 @@ TRAJECTORY_CSV_COLUMNS = [
     "harness_reward",
     "harness_success",
     "run_status",
+    "judge_pending",
 ]
 
 MEMORY_CSV_COLUMNS = [
@@ -87,6 +88,9 @@ DEFAULT_MEMORIES_CSV = REPO_ROOT / "data" / "webarena" / "trajectories_memories.
 DEFAULT_MEMORY_RUN_CSV = REPO_ROOT / "data" / "webarena" / "trajectories_private_memories.csv"
 DEFAULT_INFRA_LOG = REPO_ROOT / "data" / "webarena" / "infra_errors.log"
 DEFAULT_MAX_STEPS = 30
+# Agent Think calls with think=True can run to tens of seconds on a shared
+# A30; a spurious timeout is written as agent_error, not retried as infra.
+THINK_REQUEST_TIMEOUT_SECONDS = 300.0
 
 
 def require_wa_env_vars() -> None:
@@ -220,6 +224,16 @@ def load_memory_built_task_ids(csv_path: Path) -> set[int]:
 def ensure_csv_header(csv_path: Path, columns: list[str]) -> None:
     csv_path.parent.mkdir(parents=True, exist_ok=True)
     if csv_path.exists() and csv_path.stat().st_size > 0:
+        with csv_path.open("r", encoding="utf-8", newline="") as fh:
+            reader = csv.reader(fh)
+            existing = next(reader, None)
+        if existing is not None and existing != columns:
+            raise ValueError(
+                f"Header mismatch in {csv_path}:\n"
+                f"  expected: {columns}\n"
+                f"  found:    {existing}\n"
+                "Pass a fresh --csv-path to start a new file."
+            )
         return
     with csv_path.open("w", encoding="utf-8", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=columns)
@@ -325,6 +339,39 @@ def load_memory_entries_from_csv(csv_path: Path) -> list[tuple[int, MemoryEntry]
             entry.embedding = [float(x) for x in embedding]
             pairs.append((int(task_id_raw), entry))
     return pairs
+
+
+def judge_calls_path(csv_path: Path) -> Path:
+    """Sidecar JSONL path for deferred judge calls, derived from the CSV stem."""
+    return csv_path.with_name(csv_path.stem + "_judge_calls.jsonl")
+
+
+def judge_scores_path(csv_path: Path) -> Path:
+    """Sidecar CSV path for offline judge scores, derived from the CSV stem."""
+    return csv_path.with_name(csv_path.stem + "_judge_scores.csv")
+
+
+def append_judge_calls_record(
+    jsonl_path: Path,
+    *,
+    task_id: int,
+    intent: str,
+    run_status: str,
+    deferred_reward: float,
+    calls: list[dict],
+) -> None:
+    """Append one JSONL record for a task whose judge was deferred."""
+    jsonl_path.parent.mkdir(parents=True, exist_ok=True)
+    record = {
+        "task_id": task_id,
+        "intent": intent,
+        "run_status": run_status,
+        "deferred_reward": deferred_reward,
+        "calls": calls,
+    }
+    with jsonl_path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+        fh.flush()
 
 
 def state_from_trajectory_row(row: dict[str, str]) -> AgentState:

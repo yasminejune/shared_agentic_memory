@@ -13,12 +13,14 @@ from agent_memories.agent.nodes import (
 from agent_memories.agent.state import AgentState
 from agent_memories.types import ChatClient
 
-from .actions import ActionParseError, parse_action
+from .actions import ActionParseError, extract_action_line, parse_action
 from .env import THINK_SYSTEM_PROMPT, WebArenaEnvWrapper
 
 NodeFn = Callable[[AgentState], AgentState]
 
-THINK_MAX_TOKENS = 256
+# Covers the native reasoning trace and the action line together when
+# the WebArena runners construct OllamaClient with think=True.
+THINK_MAX_TOKENS = 1024
 
 
 def _trace(line: str) -> None:
@@ -63,13 +65,13 @@ def make_think(
         _trace(f"[Think]: {raw}")
 
         try:
-            action_str = parse_action(raw)
+            action_str = parse_action(extract_action_line(raw))
         except ActionParseError as exc:
             return _record_think_failure(state, raw=raw, outcome=f"parse_failure: {exc}")
 
         return {
             **state,
-            "thought": raw,
+            "thought": action_str,
             "action": {"type": "browsergym", "string": action_str},
         }
 
@@ -82,13 +84,10 @@ def make_act(wrapper: WebArenaEnvWrapper) -> NodeFn:
     def act(state: AgentState) -> AgentState:
         action_obj = state.get("action", {})
         action_str = action_obj.get("string", "") if isinstance(action_obj, dict) else ""
-        try:
-            wrapper.step(action_str)
-            outcome = "ok"
-            if wrapper.last_obs.get("last_action_error"):
-                outcome = f"error: {wrapper.last_obs['last_action_error']}"
-        except Exception as exc:
-            outcome = f"error: {type(exc).__name__}: {exc}"
+        wrapper.step(action_str)
+        outcome = "ok"
+        if wrapper.last_obs.get("last_action_error"):
+            outcome = f"error: {wrapper.last_obs['last_action_error']}"
 
         _trace(f"[Act]: {action_str} -> {outcome}")
         record = {
@@ -114,8 +113,8 @@ def _is_stuck(history: list[dict[str, Any]], threshold: int) -> bool:
         return False
     tail = history[-threshold:]
     first_thought = tail[0].get("thought", "")
-    if not first_thought:
-        return False
+    # Empty thoughts count: repeated empty replies (e.g. a thinking budget
+    # that never reaches content) must abort rather than burn max_steps.
     return all(r.get("thought", "") == first_thought for r in tail)
 
 

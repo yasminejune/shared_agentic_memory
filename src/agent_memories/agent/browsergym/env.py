@@ -26,6 +26,7 @@ from browsergym.core.action.functions import (
 from browsergym.core.action.highlevel import HighLevelActionSet
 from browsergym.core.action.parsers import highlevel_action_parser
 
+from . import deferred_judge
 from .navigation import go_home, goto
 from .observation import preprocess_obs
 
@@ -137,6 +138,7 @@ class WebArenaEnvWrapper:
         self.last_info: dict[str, Any] = {}
         self.last_reward: float = 0.0
         self.last_terminated: bool = False
+        self.last_judge_calls: list[dict[str, Any]] = []
 
     def reset(self) -> tuple[dict[str, Any], dict[str, Any]]:
         obs, info = self.env.reset()
@@ -144,14 +146,17 @@ class WebArenaEnvWrapper:
         self.last_info = info
         self.last_reward = 0.0
         self.last_terminated = False
+        self.last_judge_calls = []
         return self.last_obs, info
 
     def step(self, action: str) -> tuple[dict[str, Any], float, bool, bool, dict[str, Any]]:
+        deferred_judge.reset()
         obs, reward, terminated, truncated, info = self.env.step(action)
         self.last_obs = preprocess_obs(obs)
         self.last_info = info
         self.last_reward = float(reward)
         self.last_terminated = bool(terminated or truncated)
+        self.last_judge_calls = deferred_judge.calls()
         return self.last_obs, self.last_reward, bool(terminated), bool(truncated), info
 
     def close(self) -> None:

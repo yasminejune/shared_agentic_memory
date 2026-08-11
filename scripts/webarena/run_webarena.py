@@ -30,10 +30,13 @@ from common import (
     QWEN_MODEL,
     RUN_STATUS_AGENT_ERROR,
     RUN_STATUS_OK,
+    THINK_REQUEST_TIMEOUT_SECONDS,
     TRAJECTORY_CSV_COLUMNS,
     append_csv_row,
+    append_judge_calls_record,
     ensure_csv_header,
     is_infra_error,
+    judge_calls_path,
     load_intent_template_ids,
     load_ok_task_ids,
     log_infra_error,
@@ -45,6 +48,7 @@ from common import (
 )
 from dotenv import load_dotenv
 
+from agent_memories.agent.browsergym import deferred_judge
 from agent_memories.agent.browsergym.env import WebArenaEnvWrapper, make_webarena_env
 from agent_memories.agent.browsergym.graph import build_graph
 from agent_memories.agent.browsergym.nodes import extract_bot_response, make_think
@@ -55,7 +59,11 @@ from agent_memories.types import ChatClient
 
 
 def _build_client() -> ChatClient:
-    return OllamaClient(model=QWEN_MODEL)
+    return OllamaClient(
+        model=QWEN_MODEL,
+        think=True,
+        request_timeout=THINK_REQUEST_TIMEOUT_SECONDS,
+    )
 
 
 def _write_trajectory_row(
@@ -69,9 +77,11 @@ def _write_trajectory_row(
     final_state_yaml: str,
     bot_response: str,
     run_status: str,
-) -> None:
+) -> bool:
+    """Write a trajectory row and its judge sidecar. Returns True if judge is pending."""
     harness_reward = wrapper.last_reward
     harness_success = harness_reward > 0
+    pending = bool(wrapper.last_judge_calls)
 
     append_csv_row(
         csv_path,
@@ -86,8 +96,19 @@ def _write_trajectory_row(
             "harness_reward": str(harness_reward),
             "harness_success": str(harness_success),
             "run_status": run_status,
+            "judge_pending": str(pending),
         },
     )
+    if pending:
+        append_judge_calls_record(
+            judge_calls_path(csv_path),
+            task_id=task_id,
+            intent=intent,
+            run_status=run_status,
+            deferred_reward=harness_reward,
+            calls=wrapper.last_judge_calls,
+        )
+    return pending
 
 
 def _run_task(
@@ -211,6 +232,7 @@ def main(argv: list[str] | None = None) -> None:
         massage=not args.skip_massage,
         infra_log=args.infra_log,
     )
+    deferred_judge.install()
 
     template_ids = load_intent_template_ids()
     ok_task_ids = load_ok_task_ids(args.csv_path)
@@ -245,6 +267,15 @@ def main(argv: list[str] | None = None) -> None:
         tasks_run += 1
 
     print(f"[Runner] Done. Trajectories at {args.csv_path}", flush=True)
+    calls_file = judge_calls_path(args.csv_path)
+    if calls_file.exists():
+        n = sum(1 for _ in calls_file.open("r", encoding="utf-8"))
+        print(
+            f"[Runner] {n} tasks awaiting LLM judge. Next:\n"
+            f"  python scripts/webarena/score_deferred_judge.py "
+            f"--calls {calls_file}",
+            flush=True,
+        )
 
 
 if __name__ == "__main__":
