@@ -138,5 +138,6 @@ module = [
     "huggingface_hub.*",
     "IPython.*",
     "sentence_transformers.*",
+    "webarena.*",
 ]
 ignore_missing_imports = true

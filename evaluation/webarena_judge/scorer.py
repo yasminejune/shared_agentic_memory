@@ -61,7 +61,7 @@ def install_mistral_judge(client: MistralClient) -> None:
             max_tokens=JUDGE_MAX_TOKENS,
         )
 
-    helper_functions.generate_from_openai_chat_completion = _mistral_chat_completion  # type: ignore[assignment]
+    helper_functions.generate_from_openai_chat_completion = _mistral_chat_completion
 
 
 def score_single_call(

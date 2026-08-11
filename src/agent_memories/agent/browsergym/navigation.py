@@ -1,10 +1,15 @@
 """Custom BrowserGym navigation actions closed under the WebArena instance."""
 
+from __future__ import annotations
+
+from typing import Any
+
 # Placeholder for BrowserGym's exec globals (see browsergym.core.action.functions).
-page = None  # type: ignore[assignment]
+# At action time BrowserGym injects the live Playwright page into this name.
+page: Any = None
 
 
-def goto(url: str):
+def goto(url: str) -> None:
     """
     Navigate to a url within the WebArena instance. Urls outside the instance
     are redirected to the WebArena homepage.
@@ -18,7 +23,7 @@ def goto(url: str):
     page.goto(resolve_local_url(url, site_urls, home_url))
 
 
-def go_home():
+def go_home() -> None:
     """
     Navigate to the WebArena homepage, which lists every website available in
     the environment. Use this to reach a different website.

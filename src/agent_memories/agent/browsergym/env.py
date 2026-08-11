@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Callable
-from typing import Any
+from types import FunctionType
+from typing import Any, cast
 
 import gymnasium as gym
 from browsergym.core.action import utils as action_utils
@@ -32,7 +33,7 @@ from .observation import preprocess_obs
 
 # Stock webarena subset minus goto / go_forward, plus sandboxed goto and go_home.
 # noop is always allowed by BrowserGym and is included here for the executable mapping.
-_WEBARENA_ACTIONS: list[Callable] = [
+_WEBARENA_ACTIONS: list[Callable[..., Any]] = [
     noop,
     scroll,
     keyboard_press,
@@ -69,8 +70,8 @@ def _build_python_includes() -> str:
     for _, func in inspect.getmembers(action_utils, inspect.isfunction):
         parts.append(inspect.getsource(func))
         parts.append("\n\n")
-    for func in _WEBARENA_ACTIONS:
-        parts.append(inspect.getsource(func))
+    for action_fn in cast(list[FunctionType], _WEBARENA_ACTIONS):
+        parts.append(inspect.getsource(action_fn))
         parts.append("\n\n")
     return "".join(parts)
 
@@ -97,7 +98,7 @@ def webarena_action_to_python(action: str) -> str:
     if function_name not in WEBARENA_ACTION_SET.action_set:
         raise NameError(f"Invalid action type '{function_name}'.")
 
-    call = function_name + "(" + ", ".join([repr(arg) for arg in function_args]) + ")\n"
+    call = str(function_name) + "(" + ", ".join([repr(arg) for arg in function_args]) + ")\n"
     return _PYTHON_INCLUDES + call
 
 

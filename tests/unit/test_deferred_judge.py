@@ -4,19 +4,25 @@ from __future__ import annotations
 
 import csv
 import json
-import math
 import sys
 from pathlib import Path
-from typing import Any
 from unittest.mock import patch
 
 import pytest
 
-# ---------------------------------------------------------------------------
-# 1. Shim tests
-# ---------------------------------------------------------------------------
-
 from agent_memories.agent.browsergym import deferred_judge
+from evaluation.webarena_judge.scorer import score_task
+
+_WEBARENA_DIR = Path(__file__).resolve().parent.parent.parent / "scripts" / "webarena"
+if str(_WEBARENA_DIR) not in sys.path:
+    sys.path.insert(0, str(_WEBARENA_DIR))
+
+from common import (  # noqa: E402
+    append_judge_calls_record,
+    ensure_csv_header,
+    judge_calls_path,
+    judge_scores_path,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -79,10 +85,13 @@ def test_install_is_idempotent() -> None:
     saved = deferred_judge._installed
     try:
         deferred_judge._installed = False
-        with patch.dict("sys.modules", {
-            "webarena.evaluation_harness": fake_harness,
-            "webarena.evaluation_harness.evaluators": fake_evaluators,
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "webarena.evaluation_harness": fake_harness,
+                "webarena.evaluation_harness.evaluators": fake_evaluators,
+            },
+        ):
             deferred_judge.install()
             assert fake_evaluators.llm_fuzzy_match is deferred_judge._stub_fuzzy_match
             assert fake_evaluators.llm_ua_match is deferred_judge._stub_ua_match
@@ -96,8 +105,6 @@ def test_install_is_idempotent() -> None:
 # 2. Scoring arithmetic tests
 # ---------------------------------------------------------------------------
 
-from evaluation.webarena_judge.scorer import score_task
-
 
 class _FakeJudgeClient:
     """Chat client that returns predetermined verdicts."""
@@ -106,7 +113,9 @@ class _FakeJudgeClient:
         self._responses = list(responses)
         self._idx = 0
 
-    def chat(self, system: str, user: str, *, temperature: float = 0.0, max_tokens: int | None = None) -> str:
+    def chat(
+        self, system: str, user: str, *, temperature: float = 0.0, max_tokens: int | None = None
+    ) -> str:
         resp = self._responses[self._idx % len(self._responses)]
         self._idx += 1
         return resp
@@ -120,7 +129,9 @@ def test_score_task_single_correct() -> None:
         return 1.0, "scored"
 
     with patch("evaluation.webarena_judge.scorer.score_single_call", side_effect=fake_score):
-        verdicts, product, final, success, status = score_task(calls, 1.0, max_retries=1, sleep_between=0)
+        verdicts, product, final, success, status = score_task(
+            calls, 1.0, max_retries=1, sleep_between=0
+        )
     assert verdicts == [1.0]
     assert product == 1.0
     assert final == 1.0
@@ -136,7 +147,9 @@ def test_score_task_single_incorrect() -> None:
         return 0.0, "scored"
 
     with patch("evaluation.webarena_judge.scorer.score_single_call", side_effect=fake_score):
-        verdicts, product, final, success, status = score_task(calls, 1.0, max_retries=1, sleep_between=0)
+        verdicts, product, final, success, status = score_task(
+            calls, 1.0, max_retries=1, sleep_between=0
+        )
     assert verdicts == [0.0]
     assert product == 0.0
     assert final == 0.0
@@ -156,7 +169,9 @@ def test_score_task_multi_reference_product() -> None:
         return next(results)
 
     with patch("evaluation.webarena_judge.scorer.score_single_call", side_effect=fake_score):
-        verdicts, product, final, success, status = score_task(calls, 1.0, max_retries=1, sleep_between=0)
+        verdicts, product, final, success, status = score_task(
+            calls, 1.0, max_retries=1, sleep_between=0
+        )
     assert verdicts == [1.0, 0.0]
     assert product == 0.0
     assert final == 0.0
@@ -170,7 +185,9 @@ def test_score_task_deferred_reward_zero_short_circuits() -> None:
         return 1.0, "scored"
 
     with patch("evaluation.webarena_judge.scorer.score_single_call", side_effect=fake_score):
-        verdicts, product, final, success, status = score_task(calls, 0.0, max_retries=1, sleep_between=0)
+        verdicts, product, final, success, status = score_task(
+            calls, 0.0, max_retries=1, sleep_between=0
+        )
     assert product == 1.0
     assert final == 0.0
     assert success is False
@@ -184,19 +201,15 @@ def test_score_task_unparseable_status() -> None:
         return 0.0, "unparseable"
 
     with patch("evaluation.webarena_judge.scorer.score_single_call", side_effect=fake_score):
-        verdicts, product, final, success, status = score_task(calls, 1.0, max_retries=1, sleep_between=0)
+        verdicts, product, final, success, status = score_task(
+            calls, 1.0, max_retries=1, sleep_between=0
+        )
     assert status == "unparseable"
 
 
 # ---------------------------------------------------------------------------
 # 3. common.py header guard test
 # ---------------------------------------------------------------------------
-
-_WEBARENA_DIR = Path(__file__).resolve().parent.parent.parent / "scripts" / "webarena"
-if str(_WEBARENA_DIR) not in sys.path:
-    sys.path.insert(0, str(_WEBARENA_DIR))
-
-from common import ensure_csv_header
 
 
 @pytest.mark.unit
@@ -235,8 +248,6 @@ def test_ensure_csv_header_creates_new_file(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 # 4. JSONL writer test
 # ---------------------------------------------------------------------------
-
-from common import append_judge_calls_record, judge_calls_path, judge_scores_path
 
 
 @pytest.mark.unit

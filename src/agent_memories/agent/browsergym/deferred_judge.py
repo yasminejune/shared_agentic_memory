@@ -27,22 +27,26 @@ _installed: bool = False
 
 
 def _stub_fuzzy_match(pred: str, reference: str, question: str) -> float:
-    _buffer.append({
-        "kind": "fuzzy",
-        "pred": pred,
-        "reference": reference,
-        "intent": question,
-    })
+    _buffer.append(
+        {
+            "kind": "fuzzy",
+            "pred": pred,
+            "reference": reference,
+            "intent": question,
+        }
+    )
     return 1.0
 
 
 def _stub_ua_match(pred: str, reference: str, question: str) -> float:
-    _buffer.append({
-        "kind": "ua",
-        "pred": pred,
-        "reference": reference,
-        "intent": question,
-    })
+    _buffer.append(
+        {
+            "kind": "ua",
+            "pred": pred,
+            "reference": reference,
+            "intent": question,
+        }
+    )
     return 1.0
 
 
@@ -53,8 +57,8 @@ def install() -> None:
         return
     from webarena.evaluation_harness import evaluators
 
-    evaluators.llm_fuzzy_match = _stub_fuzzy_match  # type: ignore[assignment]
-    evaluators.llm_ua_match = _stub_ua_match  # type: ignore[assignment]
+    evaluators.llm_fuzzy_match = _stub_fuzzy_match
+    evaluators.llm_ua_match = _stub_ua_match
     _installed = True
 
 
