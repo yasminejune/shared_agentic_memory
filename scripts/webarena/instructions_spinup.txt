@@ -89,3 +89,20 @@ final_reward = harness_reward * judge_product.
 
 The pinned judge model is mistral-large-2512 (overridable via --model).
 MISTRAL_API_KEY must be set in .env or the environment.
+
+## 8. Reproducibility (RANDOM_SEED)
+
+RANDOM_SEED is required in .env (no default, no CLI override). Example:
+
+  RANDOM_SEED=3006
+
+Evaluation scripts (run_webarena.py, run_webarena_with_memories.py,
+build_memories_from_trajectories.py, score_deferred_judge.py) call
+load_random_seed() after load_dotenv(), seed Python/numpy/torch, and
+pass the seed into OllamaClient options. Each run logs
+random_seed=<value> at startup.
+
+Limits: Ollama reproducibility is best-effort (same machine, model
+tag, and seed); WebArena Docker DB state can still drift across tasks
+(--reset-every / WA_FULL_RESET help); Mistral judge has no seed API
+parameter (temperature=0.0 only).

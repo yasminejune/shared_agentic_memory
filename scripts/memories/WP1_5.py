@@ -37,7 +37,7 @@ from agent_memories.agent.nodes import (
     make_think,
 )
 from agent_memories.agent.state import AgentState
-from agent_memories.config import DEFAULT_MEMORY_DIR, DEFAULT_USER_ID
+from agent_memories.config import DEFAULT_MEMORY_DIR, DEFAULT_USER_ID, load_random_seed
 from agent_memories.memory import Embedder, MemoryPipeline, MemoryStore
 from agent_memories.memory.store import MemoryEntry
 from agent_memories.services.mistral_client import MistralClient
@@ -53,9 +53,9 @@ DEFAULT_MAX_STEPS = 10
 DEFAULT_K = 1
 
 
-def _build_client(name: str) -> ChatClient:
+def _build_client(name: str, seed: int) -> ChatClient:
     if name == "qwen":
-        return OllamaClient(model=QWEN_MODEL)
+        return OllamaClient(model=QWEN_MODEL, seed=seed)
     return MistralClient(model=MISTRAL_MODEL)
 
 
@@ -136,7 +136,7 @@ def main(argv: list[str] | None = None) -> AgentState:
         flush=True,
     )
 
-    client = _build_client(args.model)
+    client = _build_client(args.model, load_random_seed())
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=args.headless)

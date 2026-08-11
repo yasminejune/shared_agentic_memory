@@ -34,22 +34,32 @@ DEFAULT_BASE_URL = "http://localhost:11434"
 class OllamaClient:
     """Minimal native-Ollama chat wrapper.
 
-    The model name (e.g. ``qwen3:8b``) is bound at construction time
-    because the WP1 loop sends the same kind of prompt every step.
-    ``base_url`` defaults to the local Ollama server; override only
-    when running against a remote host.
+    The model name (e.g. ``qwen3:8b``) and reproducibility ``seed`` are
+    bound at construction time because the WP1 loop sends the same kind
+    of prompt every step. ``seed`` is always sent in the Ollama
+    ``options`` payload. ``base_url`` defaults to the local Ollama
+    server; override only when running against a remote host.
     """
 
     def __init__(
         self,
         *,
         model: str,
+        seed: int,
         base_url: str = DEFAULT_BASE_URL,
         request_timeout: float = DEFAULT_REQUEST_TIMEOUT_SECONDS,
         num_predict: int = DEFAULT_NUM_PREDICT,
         think: bool = False,
     ) -> None:
+        """Bind model and reproducibility seed at construction time.
+
+        ``seed`` is always forwarded in the Ollama ``options`` payload.
+        Callers must pass an explicit value (typically from
+        :func:`agent_memories.config.load_random_seed`); there is no
+        silent default.
+        """
         self.model = model
+        self.seed = seed
         self.base_url = base_url.rstrip("/")
         self.request_timeout = request_timeout
         self.num_predict = num_predict
@@ -87,6 +97,7 @@ class OllamaClient:
             "options": {
                 "temperature": temperature,
                 "num_predict": num_predict,
+                "seed": self.seed,
             },
         }
         response = self._http.post(f"{self.base_url}/api/chat", json=payload)

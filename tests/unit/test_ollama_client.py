@@ -22,7 +22,7 @@ from agent_memories.services.ollama_client import OllamaClient
 def _make_client_with_mock(
     handler: Any,
 ) -> OllamaClient:
-    client = OllamaClient(model="qwen3:8b")
+    client = OllamaClient(model="qwen3:8b", seed=3006)
     client._http.close()
     client._http = httpx.Client(transport=httpx.MockTransport(handler))
     return client
@@ -51,6 +51,7 @@ def test_chat_returns_completion_on_success() -> None:
     assert captured["json"]["stream"] is False
     assert captured["json"]["options"]["num_predict"] == 64
     assert captured["json"]["options"]["temperature"] == 0.0
+    assert captured["json"]["options"]["seed"] == 3006
     assert captured["json"]["messages"] == [
         {"role": "system", "content": "sys"},
         {"role": "user", "content": "usr"},
@@ -68,7 +69,7 @@ def test_think_true_is_sent_in_payload() -> None:
             json={"message": {"role": "assistant", "content": "click('53')"}},
         )
 
-    client = OllamaClient(model="qwen3:8b", think=True)
+    client = OllamaClient(model="qwen3:8b", seed=3006, think=True)
     client._http.close()
     client._http = httpx.Client(transport=httpx.MockTransport(handler))
 
@@ -153,7 +154,7 @@ def test_num_predict_is_configurable() -> None:
             json={"message": {"role": "assistant", "content": "stop"}},
         )
 
-    client = OllamaClient(model="qwen3:8b", num_predict=128)
+    client = OllamaClient(model="qwen3:8b", seed=3006, num_predict=128)
     client._http.close()
     client._http = httpx.Client(transport=httpx.MockTransport(handler))
 
@@ -198,3 +199,23 @@ def test_chat_max_tokens_none_falls_back_to_constructor_default() -> None:
     client.chat("sys", "usr")
 
     assert captured["json"]["options"]["num_predict"] == 64
+
+
+@pytest.mark.unit
+def test_chat_includes_seed_in_options() -> None:
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["json"] = json.loads(request.content)
+        return httpx.Response(
+            200,
+            json={"message": {"role": "assistant", "content": "ok"}},
+        )
+
+    client = OllamaClient(model="qwen3:8b", seed=99)
+    client._http.close()
+    client._http = httpx.Client(transport=httpx.MockTransport(handler))
+
+    client.chat("sys", "usr")
+
+    assert captured["json"]["options"]["seed"] == 99

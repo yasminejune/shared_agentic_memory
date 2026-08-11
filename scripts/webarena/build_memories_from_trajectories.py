@@ -34,14 +34,15 @@ from common import (
 )
 from dotenv import load_dotenv
 
+from agent_memories.config import load_random_seed, set_global_seed
 from agent_memories.memory import Embedder, MemoryPipeline, MemoryStore
 from agent_memories.memory.pipeline import MemoryBuildResult
 from agent_memories.services.ollama_client import OllamaClient
 from agent_memories.types import ChatClient
 
 
-def _build_client() -> ChatClient:
-    return OllamaClient(model=QWEN_MODEL)
+def _build_client(seed: int) -> ChatClient:
+    return OllamaClient(model=QWEN_MODEL, seed=seed)
 
 
 def _load_trajectory_rows(
@@ -135,12 +136,15 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     load_dotenv()
+    seed = load_random_seed()
+    set_global_seed(seed)
+    print(f"[Memory] random_seed={seed}", flush=True)
     require_ollama_model(QWEN_MODEL)
 
     built_task_ids = load_memory_built_task_ids(args.output_csv)
     ensure_csv_header(args.output_csv, MEMORY_CSV_COLUMNS)
 
-    client = _build_client()
+    client = _build_client(seed)
     embedder = Embedder()
     throwaway_store = MemoryStore.load(
         args.output_csv.parent / ".throwaway_memories.jsonl",

@@ -14,11 +14,15 @@ Prerequisites:
 
 from __future__ import annotations
 
+from dotenv import load_dotenv
+
+from agent_memories.config import load_random_seed
 from agent_memories.services.ollama_client import OllamaClient
 
 
 def main() -> None:
-    client = OllamaClient(model="qwen3.5:4b-nvfp4")
+    load_dotenv()
+    client = OllamaClient(model="qwen3.5:4b-nvfp4", seed=load_random_seed())
     reply = client.chat(
         system="You answer in one short sentence.",
         user="Say hello and name yourself.",

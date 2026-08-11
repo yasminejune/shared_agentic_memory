@@ -69,6 +69,7 @@ from agent_memories.agent.browsergym.graph import build_graph
 from agent_memories.agent.browsergym.nodes import extract_bot_response, make_think
 from agent_memories.agent.nodes import OBSERVATION_CHAR_BUDGET
 from agent_memories.agent.state import AgentState, new_state
+from agent_memories.config import load_random_seed, set_global_seed
 from agent_memories.memory import Embedder, MemoryEntry
 from agent_memories.memory.store import _cosine_top_k
 from agent_memories.services.ollama_client import OllamaClient
@@ -77,9 +78,10 @@ from agent_memories.types import ChatClient
 DEFAULT_K = 3
 
 
-def _build_client() -> ChatClient:
+def _build_client(seed: int) -> ChatClient:
     return OllamaClient(
         model=QWEN_MODEL,
+        seed=seed,
         think=True,
         request_timeout=THINK_REQUEST_TIMEOUT_SECONDS,
     )
@@ -339,6 +341,9 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     load_dotenv()
+    seed = load_random_seed()
+    set_global_seed(seed)
+    print(f"[Runner] random_seed={seed}", flush=True)
     require_wa_env_vars()
     require_nltk_punkt_tab()
     require_ollama_model(QWEN_MODEL)
@@ -368,7 +373,7 @@ def main(argv: list[str] | None = None) -> None:
     ok_task_ids = load_ok_task_ids(args.csv_path)
     ensure_csv_header(args.csv_path, MEMORY_RUN_CSV_COLUMNS)
 
-    client = _build_client()
+    client = _build_client(seed)
 
     import browsergym.webarena  # noqa: F401
     from browsergym.webarena.instance import WebArenaInstance

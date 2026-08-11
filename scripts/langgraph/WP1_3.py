@@ -23,6 +23,7 @@ from playwright.sync_api import sync_playwright
 from agent_memories.agent import build_graph, new_state
 from agent_memories.agent.nodes import DEFAULT_STUCK_THRESHOLD, make_think
 from agent_memories.agent.state import AgentState
+from agent_memories.config import load_random_seed
 from agent_memories.services.mistral_client import MistralClient
 from agent_memories.services.ollama_client import OllamaClient
 from agent_memories.types import ChatClient
@@ -35,9 +36,9 @@ DEFAULT_AIM = "Find amazon results for paper"
 DEFAULT_MAX_STEPS = 30
 
 
-def _build_client(name: str) -> ChatClient:
+def _build_client(name: str, seed: int) -> ChatClient:
     if name == "qwen":
-        return OllamaClient(model=QWEN_MODEL)
+        return OllamaClient(model=QWEN_MODEL, seed=seed)
     return MistralClient(model=MISTRAL_MODEL)
 
 
@@ -68,7 +69,7 @@ def main(argv: list[str] | None = None) -> AgentState:
     args = parser.parse_args(argv)
 
     load_dotenv()
-    client = _build_client(args.model)
+    client = _build_client(args.model, load_random_seed())
     state = new_state(aim=args.aim)
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=args.headless)

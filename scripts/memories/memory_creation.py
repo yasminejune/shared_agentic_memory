@@ -28,6 +28,7 @@ from typing import Any
 from dotenv import load_dotenv
 
 from agent_memories.agent.state import AgentState, new_state
+from agent_memories.config import load_random_seed
 from agent_memories.memory import Embedder, MemoryPipeline, MemoryStore
 from agent_memories.services.mistral_client import MistralClient
 from agent_memories.services.ollama_client import OllamaClient
@@ -37,9 +38,9 @@ QWEN_MODEL = "qwen3.5:4b-nvfp4"
 MISTRAL_MODEL = "mistral-small-latest"
 
 
-def _build_client(name: str) -> ChatClient:
+def _build_client(name: str, seed: int) -> ChatClient:
     if name == "qwen":
-        return OllamaClient(model=QWEN_MODEL)
+        return OllamaClient(model=QWEN_MODEL, seed=seed)
     return MistralClient(model=MISTRAL_MODEL)
 
 
@@ -167,7 +168,7 @@ def main(argv: list[str] | None = None) -> int:
 
     load_dotenv()
     embedder = Embedder()
-    client = _build_client(args.model)
+    client = _build_client(args.model, load_random_seed())
 
     results: list[tuple[str, str | None]] = []
 

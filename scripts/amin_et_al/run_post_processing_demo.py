@@ -21,6 +21,9 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+from agent_memories.config import load_random_seed
 from agent_memories.generalisation import save_intermediate, title_and_description
 from agent_memories.memory.store import MemoryItem
 from agent_memories.services.ollama_client import OllamaClient
@@ -52,7 +55,8 @@ def main(argv: list[str] | None = None) -> None:
     )
     args = parser.parse_args(argv)
 
-    client = OllamaClient(model=QWEN_MODEL)
+    load_dotenv()
+    client = OllamaClient(model=QWEN_MODEL, seed=load_random_seed())
     title, description = title_and_description(
         content=args.content,
         label=args.label,

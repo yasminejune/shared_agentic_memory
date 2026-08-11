@@ -100,6 +100,8 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 from agent_memories.agent.privacy import (
     PrivacyAccount,
     epsilon_from_rho,
@@ -108,7 +110,7 @@ from agent_memories.agent.privacy import (
     solve_r,
 )
 from agent_memories.agent.privacy.prompts import wrap, wrap_label
-from agent_memories.config import DEFAULT_MEMORY_DIR
+from agent_memories.config import DEFAULT_MEMORY_DIR, load_random_seed
 from agent_memories.generalisation import (
     CycleItem,
     assign_memories_to_labels,
@@ -494,6 +496,9 @@ def main(argv: list[str] | None = None) -> None:
     checkpoint_path = memory_dir / CHECKPOINT_FILENAME
     audit_path = memory_dir / AUDIT_FILENAME
 
+    load_dotenv()
+    seed = load_random_seed()
+
     # Run the agent trajectories to get the new entries
     if not args.skip_trajectories:
         _run_trajectories(
@@ -570,7 +575,7 @@ def main(argv: list[str] | None = None) -> None:
     print(f"[WP2] Carry-over count: {len(gating.carry_over)}")
 
     shared_store = MemoryStore.load(shared_path, user_id="shared", embedder=embedder)
-    ollama_client = OllamaClient(model=QWEN_MODEL)
+    ollama_client = OllamaClient(model=QWEN_MODEL, seed=seed)
 
     round2_records: list[dict] = []
     consumed_indices: set[int] = set()

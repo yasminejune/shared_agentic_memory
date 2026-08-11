@@ -30,6 +30,7 @@ if str(_WEBARENA_DIR) not in sys.path:
 from common import require_wa_env_vars
 from dotenv import load_dotenv
 
+from agent_memories.config import load_random_seed, set_global_seed
 from agent_memories.services.mistral_client import MistralClient
 from evaluation.webarena_judge.scorer import (
     JUDGE_MAX_TOKENS,
@@ -94,6 +95,9 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     load_dotenv()
+    seed = load_random_seed()
+    set_global_seed(seed)
+    print(f"[Judge] random_seed={seed}", flush=True)
     require_wa_env_vars()
     _export_bare_wa_vars()
 
