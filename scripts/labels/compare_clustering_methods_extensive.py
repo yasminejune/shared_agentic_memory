@@ -48,6 +48,18 @@ labelling design:
   reference point, in contrast to the apples-to-apples ``bertopic`` mode
   above. Expect uninformative single-cluster output on the toy fixture;
   this method only becomes meaningful at the WP3.4 pilot corpus size.
+* ``invisible_ink`` — InvisibleInk (Vinod et al., arXiv:2507.02974)
+  Algorithm 1 via
+  :func:`~agent_memories.agent.invisible_ink.generate`, with the same
+  production :func:`~agent_memories.agent.privacy.prompts.wrap_label`
+  template and :func:`~agent_memories.generalisation.parse_json_labels`
+  parser as the two Amin variants. Isolates the mechanism switch from
+  Amin: same prompt, same Gemma 2 IT model, same ``k``, same cosine
+  assignment; different clipping (DClip vs Amin clip-recenter),
+  different support (Top-k+ vs full vocabulary), different accounting
+  (every token paid a priori via Theorem 2, no SVT). Privacy-critical
+  arithmetic is the authors' ``invink.utils``; the generation loop is
+  ours on the project's KV-cache plumbing.
 
 TopicDP (Wang et al. KDD 2022, a model-agnostic DP wrapper that injects
 Gaussian noise calibrated via smooth-sensitivity sampling into a non-private
@@ -104,9 +116,11 @@ from bertopic import BERTopic
 from bertopic.dimensionality import BaseDimensionalityReduction
 from datasets import load_dataset
 from hdbscan import HDBSCAN
+from invink.utils import cdp_eps
 from sklearn.cluster import KMeans as SklearnKMeans
 from umap import UMAP
 
+from agent_memories.agent.invisible_ink import generate as generate_invisible_ink
 from agent_memories.agent.privacy import (
     check_delta,
     epsilon_from_rho,
@@ -151,12 +165,20 @@ SEED_DEFAULT = 0
 # whether logits are computed in one batch or accumulated over chunks; chunking
 # only caps peak GPU memory (batch=100 on long dialogues can exceed 30 GiB).
 GEMMA_CHUNK_SIZE_DEFAULT = 8
+# InvisibleInk defaults. EPSILON_II_DEFAULT is the authors' recommended
+# operating point (invink README); Amin needs EPSILON_DEFAULT=200 to stay
+# coherent, so matched-budget comparisons should pass --ii-epsilon 200.
+EPSILON_II_DEFAULT = 10.0
+TOP_K_II_DEFAULT = 100
+TAU_II_DEFAULT = 1.0
+DELTA_II_DEFAULT = 1e-5
 ALL_METHODS: tuple[str, ...] = (
     "amin_nodp",
     "amin_dp",
     "kmeans",
     "bertopic",
     "bertopic_pure",
+    "invisible_ink",
 )
 
 OUTPUTS_PATH = Path("scripts/amin_et_al/outputs/cluster_comparison_extensive.jsonl")
@@ -520,6 +542,7 @@ def run_amin_dp(
         extra: dict[str, Any] = {
             "model": MODEL_NAME,
             "realised_epsilon": realised_epsilon,
+            "realised_epsilon_tight": float(cdp_eps(rho, delta)),
             "r": r,
             "delta": delta,
             "rho": rho,
@@ -556,6 +579,7 @@ def run_amin_dp(
     extra = {
         "model": MODEL_NAME,
         "realised_epsilon": account.epsilon,
+        "realised_epsilon_tight": float(cdp_eps(account.rho, account.delta)),
         "r": account.r,
         "delta": account.delta,
         "rho": account.rho,
@@ -570,6 +594,83 @@ def run_amin_dp(
     }
     return ClusteringResult(
         method="amin_dp",
+        labels=labels,
+        assignments=assignments,
+        extra=extra,
+    )
+
+
+def run_invisible_ink(
+    texts: list[str],
+    *,
+    k: int,
+    embedder: Embedder,
+    epsilon: float,
+    top_k: int,
+    b: int,
+    tau: float,
+    max_tokens: int,
+    delta: float,
+) -> ClusteringResult:
+    """Variant 6: InvisibleInk Algorithm 1, parsed via the production JSON parser.
+
+    Same prompt / model / k / cosine-assignment surface as
+    :func:`run_amin_dp`; the mechanism underneath is Vinod et al. 2025
+    (DClip + Top-k+, every token paid via Theorem 2). ``b`` is the paper
+    private-reference count and defaults to ``len(texts)`` so the whole
+    fixture contributes, matching ``amin_dp``'s ``S``.
+    """
+    tg.set_model(MODEL_NAME)
+    print(
+        f"  invisible_ink: target epsilon = {epsilon}, delta = {delta}, "
+        f"b={b}, tau={tau}, top_k={top_k}, max_tokens={max_tokens}"
+    )
+    raw_output, account = generate_invisible_ink(
+        texts,
+        b=b,
+        tau=tau,
+        top_k=top_k,
+        max_total_tokens=max_tokens,
+        target_epsilon=epsilon,
+        delta=delta,
+        wrap_fn=wrap_label,
+        k=k,
+    )
+    print(
+        f"  invisible_ink: tokens_used={account.tokens_used}/{account.t}, "
+        f"C={account.c:.6f}, spent epsilon={account.epsilon:.4f}, "
+        f"mean |V_k+|={account.topk_plus_mean:.1f}"
+    )
+
+    parsed = parse_json_labels(raw_output, k)
+    labels = [text for text, _ in parsed]
+    label_parsed = [flag for _, flag in parsed]
+
+    text_embeddings = np.asarray(embedder.embed_batch(texts), dtype=np.float32)
+    label_embeddings = np.asarray(embedder.embed_batch(labels), dtype=np.float32)
+    assignments = _assign_by_cosine(text_embeddings, label_embeddings)
+
+    extra: dict[str, Any] = {
+        "model": MODEL_NAME,
+        "realised_epsilon": account.epsilon,
+        "target_epsilon": epsilon,
+        "delta": account.delta,
+        "rho": account.rho,
+        "t": account.t,
+        "b": account.b,
+        "c": account.c,
+        "tau": account.tau,
+        "top_k": account.top_k,
+        "tokens_used": account.tokens_used,
+        "topk_plus_mean": account.topk_plus_mean,
+        "topk_plus_std": account.topk_plus_std,
+        "expansion_set_count": account.expansion_set_count,
+        "n_batch_members": len(texts),
+        "raw_output": raw_output,
+        "label_parsed": label_parsed,
+    }
+    return ClusteringResult(
+        method="invisible_ink",
         labels=labels,
         assignments=assignments,
         extra=extra,
@@ -951,6 +1052,52 @@ def main() -> None:
             f"microbatched fallback kicks in (default: {GEMMA_CHUNK_SIZE_DEFAULT})."
         ),
     )
+    parser.add_argument(
+        "--ii-epsilon",
+        type=float,
+        default=EPSILON_II_DEFAULT,
+        help=(
+            f"Target epsilon for invisible_ink (default: {EPSILON_II_DEFAULT}). "
+            "Pass 200 to match amin_dp's default budget for a like-for-like "
+            "comparison; 10 is the authors' recommended operating point."
+        ),
+    )
+    parser.add_argument(
+        "--ii-topk",
+        type=int,
+        default=TOP_K_II_DEFAULT,
+        help=f"Top-k+ truncation parameter for invisible_ink (default: {TOP_K_II_DEFAULT}).",
+    )
+    parser.add_argument(
+        "--ii-tau",
+        type=float,
+        default=TAU_II_DEFAULT,
+        help=f"Sampling temperature for invisible_ink (default: {TAU_II_DEFAULT}).",
+    )
+    parser.add_argument(
+        "--ii-batch-size",
+        type=int,
+        default=None,
+        help=(
+            "Private-reference count B for invisible_ink. Defaults to "
+            "len(texts) so the whole fixture contributes (matches amin_dp's S)."
+        ),
+    )
+    parser.add_argument(
+        "--ii-max-tokens",
+        type=int,
+        default=MAX_TOTAL_TOKENS,
+        help=(
+            f"Token budget T for invisible_ink (also used to calibrate C; "
+            f"default: {MAX_TOTAL_TOKENS}, matching the Amin max)."
+        ),
+    )
+    parser.add_argument(
+        "--ii-delta",
+        type=float,
+        default=DELTA_II_DEFAULT,
+        help=f"Delta for invisible_ink (epsilon, delta)-DP (default: {DELTA_II_DEFAULT}).",
+    )
     args = parser.parse_args()
 
     if args.epsilon is not None and args.r is not None:
@@ -959,6 +1106,12 @@ def main() -> None:
         parser.error("--k must be >= 1.")
     if args.gemma_chunk_size < 1:
         parser.error("--gemma-chunk-size must be >= 1.")
+    if args.ii_topk < 1:
+        parser.error("--ii-topk must be >= 1.")
+    if args.ii_max_tokens < 1:
+        parser.error("--ii-max-tokens must be >= 1.")
+    if not (0.0 < args.ii_delta < 1.0):
+        parser.error("--ii-delta must be in (0, 1).")
 
     # Load the dataset
     dataset = load_dataset("nayohan/multi_session_chat")
@@ -966,6 +1119,13 @@ def main() -> None:
     texts: list[str] = [str(t) for t in df["dialogue"]]
     if not texts:
         parser.error("dataset is empty.")
+
+    ii_batch_size = args.ii_batch_size if args.ii_batch_size is not None else len(texts)
+    if ii_batch_size < 1:
+        parser.error("--ii-batch-size must be >= 1.")
+    if ii_batch_size > len(texts):
+        parser.error(f"--ii-batch-size ({ii_batch_size}) exceeds number of texts ({len(texts)}).")
+    ii_texts = texts[:ii_batch_size]
 
     print(f"Loaded {len(texts)} texts from dataset.")
     print(
@@ -1017,12 +1177,39 @@ def main() -> None:
         print("Running bertopic_pure (default UMAP + HDBSCAN, --k ignored)...")
         results.append(run_bertopic_pure(texts, embedder=embedder, seed=args.seed))
 
+    if "invisible_ink" in args.methods:
+        print()
+        print(
+            f"Running invisible_ink (DClip + Top-k+, "
+            f"b={ii_batch_size}, epsilon={args.ii_epsilon})..."
+        )
+        results.append(
+            run_invisible_ink(
+                ii_texts,
+                k=args.k,
+                embedder=embedder,
+                epsilon=args.ii_epsilon,
+                top_k=args.ii_topk,
+                b=ii_batch_size,
+                tau=args.ii_tau,
+                max_tokens=args.ii_max_tokens,
+                delta=args.ii_delta,
+            )
+        )
+
     for result in results:
-        print_clusters(result, texts)
+        # invisible_ink may run on a prefix of texts when --ii-batch-size < N.
+        member_texts = ii_texts if result.method == "invisible_ink" else texts
+        print_clusters(result, member_texts)
 
     created_at = _utcnow_iso()
     records = [
-        _result_to_record(r, k_requested=args.k, n_texts=len(texts), created_at=created_at)
+        _result_to_record(
+            r,
+            k_requested=args.k,
+            n_texts=len(ii_texts) if r.method == "invisible_ink" else len(texts),
+            created_at=created_at,
+        )
         for r in results
     ]
     _write_jsonl(records)

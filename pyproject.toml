@@ -31,7 +31,8 @@ dependencies = [
     "umap-learn>=0.5",
     "hdbscan>=0.8",
     "matplotlib>=3.13.0",
-    "kagglehub>=1.0.2"
+    "kagglehub>=1.0.2",
+    "invink==0.1.0",
 ]
 
 [project.optional-dependencies]
@@ -139,5 +140,6 @@ module = [
     "IPython.*",
     "sentence_transformers.*",
     "webarena.*",
+    "invink.*",
 ]
 ignore_missing_imports = true
