@@ -27,14 +27,14 @@ import pandas as pd
 from agent_memories.agent.privacy import check_delta, generate, rho_for, solve_r
 
 S = 10  # batch size
-C = 50.0  # clip value
+C = 10.0  # clip value
 TAU = 1.0  # tao private
 TAU_PUBLIC = 1.5  # tao public
 SIGMA = 0.5  # noise scale
-THETA = 0.2  # threshold, the higher the less private the text is
+THETA = 0.3  # threshold, the higher the less private the text is
 R_MAX = 80  # maximum number of private tokens
 
-EPSILON = 200.0
+EPSILON = 10.0
 LABEL = "attending a recent event"
 
 
