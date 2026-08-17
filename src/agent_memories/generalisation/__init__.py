@@ -15,21 +15,28 @@ to the privacy account (see WP2-plan §4.7).
 """
 
 from .assignment import LabelAssignment, assign_memories_to_labels, group_by_label
-from .buffer import GatingResult, read_buffer, select_round2_inputs, write_buffer
-from .cycle import CycleItem, flatten_entry
+from .buffer import (
+    GatingResult,
+    entry_id,
+    read_buffer,
+    select_round2_inputs,
+    write_buffer,
+)
+from .io import load_memory_entries_from_csv, render_item_block
 from .labelling import parse_json_labels, parse_numbered_labels
 from .post_processing import save_intermediate, title_and_description
 
 __all__ = [
-    "CycleItem",
     "GatingResult",
     "LabelAssignment",
     "assign_memories_to_labels",
-    "flatten_entry",
+    "entry_id",
     "group_by_label",
+    "load_memory_entries_from_csv",
     "parse_json_labels",
     "parse_numbered_labels",
     "read_buffer",
+    "render_item_block",
     "save_intermediate",
     "select_round2_inputs",
     "title_and_description",

@@ -19,7 +19,7 @@ from .accounting import (
     rho_for_tokens,
     rho_from_epsilon,
 )
-from .generation import generate
+from .generation import generate, generate_microbatched, generate_with_oom_fallback
 
 __all__ = [
     "InvisibleInkAccount",
@@ -27,6 +27,8 @@ __all__ = [
     "epsilon_for_tokens",
     "epsilon_from_rho",
     "generate",
+    "generate_microbatched",
+    "generate_with_oom_fallback",
     "rho_for_tokens",
     "rho_from_epsilon",
 ]

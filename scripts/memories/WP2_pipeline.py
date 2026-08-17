@@ -4,7 +4,7 @@ One script, top-level constants for every knob, one ``main()``.
 Takes a task aim (e.g. ``"Find cheapest hairbrush on Amazon"``),
 runs ``N_TRAJECTORIES`` private agent trajectories across distinct
 simulated user_ids, then drives the two-round Amin et al. (2024)
-shared-memory pipeline with item-level privacy, fixed public expected
+shared-memory pipeline with entry-level privacy, fixed public expected
 batch sizes, and X-per-label gating.
 
 The pipeline flow (consistent with the WP2-plan §2 architecture
@@ -17,19 +17,18 @@ diagram, with the two user-confirmed deviations recorded below):
    already on disk (useful for the smoke run and for re-running the
    shared-memory pipeline on a fixed input).
 
-2. **Assemble cycle inputs.** Flatten every per-user trajectory entry
-   into its 1-3 ``MemoryItem`` records and select exactly the public
-   ``B = --items-per-cycle`` items whose item IDs are absent from
-   ``data/memories/.shared_state.json#step1_processed_item_ids``.
+2. **Assemble cycle inputs.** Select exactly the public
+   ``B = --entries-per-cycle`` trajectory entries whose IDs are absent
+   from ``data/memories/.shared_state.json#step1_processed_entry_ids``.
    Separately load the carry-over buffer from
-   ``data/memories/.shared_buffer.jsonl``. Carry-over items have
+   ``data/memories/.shared_buffer.jsonl``. Carry-over entries have
    already paid their round-1 privacy cost and therefore rejoin the
    pipeline at round-2 batch assignment, not at round 1.
 
-3. **Round 1 (Amin Algorithm 1, S = B).** Each ``MemoryItem`` is one
+3. **Round 1 (Amin Algorithm 1, S = B).** Each ``MemoryEntry`` is one
    protected example and one prompt row. ``S`` is the public fixed
    cycle size, ``delta`` is fixed explicitly, and ``r`` is solved
-   against ``EPSILON_PER_ROUND``. Each item's parent trajectory
+   against ``EPSILON_PER_ROUND``. Each entry's parent trajectory
    query is rendered via :func:`_render_query_block`. The DP-released
    labels become the ``query`` field (and hence the embedding
    anchor) of every shared memory; feeding queries keeps those
@@ -45,9 +44,9 @@ diagram, with the two user-confirmed deviations recorded below):
 4. **Round-2 batch assignment.** Embed the ``K`` new labels through the
    same :class:`~agent_memories.memory.Embedder` the WP1.6 stores
    use, then call :func:`assign_memories_to_labels` to bucket every
-   new and carry-over item under its nearest new label by cosine
+   new and carry-over entry under its nearest new label by cosine
    similarity. The label count remains exactly ``K``; only the
-   number of items assigned to each bucket varies. WP2-plan §4.3
+   number of entries assigned to each bucket varies. WP2-plan §4.3
    (the WP2.5 resolution) justifies that this satisfies Amin
    Assumption 1: each prompt's bucket depends only on the prompt
    itself and the DP-released labels (public via post-processing).
@@ -60,7 +59,8 @@ diagram, with the two user-confirmed deviations recorded below):
    for the next trigger.
 
 6. **Round 2 (Amin Algorithm 1, expected S = X).** Per qualifying
-   label, one Amin run receives every item as a separate prompt row while
+   label, one Amin run receives every entry as a separate prompt row
+   (each row concatenates that entry's 1-3 memory items) while
    retaining ``S = X_PER_LABEL`` as the expected batch size,
    using the same fixed ``delta`` as round 1, and ``r`` solved against
    ``EPSILON_PER_ROUND``. Amin et al. permit actual batch sizes to
@@ -83,9 +83,9 @@ diagram, with the two user-confirmed deviations recorded below):
    ``outcome="shared"``).
 
 9. **Persist buffer + checkpoint + audit log.** The carry-over
-   buffer is overwritten with this trigger's "set aside" items;
-   the checkpoint records which items have completed round 1,
-   separately records which items have contributed to a shared
+   buffer is overwritten with this trigger's "set aside" entries;
+   the checkpoint records which entries have completed round 1,
+   separately records which entries have contributed to a shared
    memory, and accumulates ``cumulative_epsilon`` across triggers;
    one line is appended to ``data/memories/.shared_audit.jsonl``
    with the per-round ``(S, r, eps)``.
@@ -112,9 +112,8 @@ from agent_memories.agent.privacy import (
 from agent_memories.agent.privacy.prompts import wrap, wrap_label
 from agent_memories.config import DEFAULT_MEMORY_DIR, load_random_seed
 from agent_memories.generalisation import (
-    CycleItem,
     assign_memories_to_labels,
-    flatten_entry,
+    entry_id,
     group_by_label,
     parse_json_labels,
     read_buffer,
@@ -122,7 +121,7 @@ from agent_memories.generalisation import (
     title_and_description,
     write_buffer,
 )
-from agent_memories.memory import Embedder, MemoryItem, MemoryStore
+from agent_memories.memory import Embedder, MemoryEntry, MemoryItem, MemoryStore
 from agent_memories.services.ollama_client import OllamaClient
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -133,7 +132,7 @@ WP1_5_SCRIPT = REPO_ROOT / "scripts" / "memories" / "WP1_5.py"
 # ------------------------------------------------------------------
 N_TRAJECTORIES = 5
 K_LABELS = 3  # Number of new labels to generate per trigger
-X_PER_LABEL = 5  # Number of items required for a round-2 shared memory generation
+X_PER_LABEL = 5  # Number of entries required for a round-2 shared memory generation
 
 AIM_DEFAULT = "Find cheapest hairbrush on Amazon"
 URL_DEFAULT = "https://www.amazon.co.uk"
@@ -162,20 +161,23 @@ SHARED_STORE_FILENAME = "shared.jsonl"
 BUFFER_FILENAME = ".shared_buffer.jsonl"
 CHECKPOINT_FILENAME = ".shared_state.json"
 AUDIT_FILENAME = ".shared_audit.jsonl"
-CHECKPOINT_SCHEMA_VERSION = 2
+CHECKPOINT_SCHEMA_VERSION = 3
 
 
 def _utcnow_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def _render_item_block(item: CycleItem) -> str:
-    """Render one protected memory item for a round-2 prompt row."""
-    return f"{item.item.title} | {item.item.description} | {item.item.content}"
+def _render_item_block(entry: MemoryEntry) -> str:
+    """Render one trajectory entry's items for a round-2 prompt row."""
+    return "\n".join(
+        f"Memory {index}: {item.title} | {item.description} | {item.content}"
+        for index, item in enumerate(entry.items, start=1)
+    )
 
 
-def _render_query_block(item: CycleItem) -> str:
-    """Render one item's parent query as its round-1 prompt row.
+def _render_query_block(entry: MemoryEntry) -> str:
+    """Render one entry's parent query as its round-1 prompt row.
 
     Round 1 synthesises the DP-released labels that become the
     ``query`` field (and hence the embedding anchor) of every shared
@@ -189,7 +191,7 @@ def _render_query_block(item: CycleItem) -> str:
     distilled ``content`` field, which needs the concrete reasoning
     steps.
     """
-    return item.query
+    return entry.query
 
 
 def _run_trajectories(
@@ -245,8 +247,8 @@ def _load_checkpoint(path: Path) -> dict:
         return {
             "schema_version": CHECKPOINT_SCHEMA_VERSION,
             "last_run_at": None,
-            "step1_processed_item_ids": [],
-            "consumed_item_ids": [],
+            "step1_processed_entry_ids": [],
+            "consumed_entry_ids": [],
             "trigger_count": 0,
             "cumulative_epsilon": 0.0,
             "cumulative_delta": 0.0,
@@ -254,9 +256,9 @@ def _load_checkpoint(path: Path) -> dict:
     state: dict = json.loads(path.read_text(encoding="utf-8"))
     if state.get("schema_version") != CHECKPOINT_SCHEMA_VERSION:
         raise RuntimeError(
-            "Checkpoint uses the legacy entry-level schema. Reset "
+            "Checkpoint uses the legacy item-level schema. Reset "
             ".shared_state.json and .shared_buffer.jsonl before running "
-            "item-level privacy."
+            "entry-level privacy."
         )
     return state
 
@@ -274,51 +276,55 @@ def _append_audit(path: Path, record: dict) -> None:
         fh.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
-def _load_unprocessed_items(
+def _load_per_user_entries(
     memory_dir: Path,
     step1_processed_ids: set[str],
     embedder: Embedder,
-) -> list[CycleItem]:
-    """Return item records that have not yet completed round 1.
+) -> list[MemoryEntry]:
+    """Return trajectory entries that have not yet completed round 1.
 
     Only ``<memory_dir>/user_*.jsonl`` is considered; the reserved
     ``shared.jsonl`` (WP2.4 cross-user store) and any hidden file
     (e.g. ``.shared_buffer.jsonl``) are excluded so the WP2 input
     set is exactly "private per-user new memories".
     """
-    new_items: list[CycleItem] = []
+    new_entries: list[MemoryEntry] = []
     for path in sorted(memory_dir.glob("user_*.jsonl")):
         store = MemoryStore.load(path, user_id=path.stem, embedder=embedder)
         for entry in store.all():
-            for item in flatten_entry(entry):
-                if item.item_id not in step1_processed_ids:
-                    new_items.append(item)
-    return new_items
+            if entry.embedding is None:
+                raise ValueError(
+                    f"Memory entry for user_id={entry.user_id!r}, query={entry.query!r} "
+                    "has no query embedding."
+                )
+            if entry_id(entry) not in step1_processed_ids:
+                new_entries.append(entry)
+    return new_entries
 
 
-def _assemble_cycle_items(
+def _assemble_cycle_entries(
     memory_dir: Path,
     step1_processed_ids: set[str],
-    carry_over: list[CycleItem],
+    carry_over: list[MemoryEntry],
     embedder: Embedder,
     *,
-    items_per_cycle: int,
-) -> tuple[list[CycleItem], list[CycleItem], set[str]]:
-    """Return one complete round-1 item batch and round-2 candidates.
+    entries_per_cycle: int,
+) -> tuple[list[MemoryEntry], list[MemoryEntry], set[str]]:
+    """Return one complete round-1 entry batch and round-2 candidates.
 
-    Carry-over items prove that they completed round 1 in an earlier
+    Carry-over entries prove that they completed round 1 in an earlier
     trigger. Adding their IDs before loading the user stores prevents the
     same protected examples from appearing once as new and once as carry-over.
-    Fewer than ``items_per_cycle`` new examples remain pending in their
+    Fewer than ``entries_per_cycle`` new examples remain pending in their
     source stores; no partial round-1 cycle is released.
     """
     processed_ids = set(step1_processed_ids)
-    processed_ids.update(item.item_id for item in carry_over)
-    available = _load_unprocessed_items(memory_dir, processed_ids, embedder)
-    if len(available) < items_per_cycle:
+    processed_ids.update(entry_id(entry) for entry in carry_over)
+    available = _load_per_user_entries(memory_dir, processed_ids, embedder)
+    if len(available) < entries_per_cycle:
         return [], [], processed_ids
-    new_items = available[:items_per_cycle]
-    return new_items, new_items + carry_over, processed_ids
+    new_entries = available[:entries_per_cycle]
+    return new_entries, new_entries + carry_over, processed_ids
 
 
 def _print_round_summary(
@@ -337,7 +343,7 @@ def _print_round_summary(
 
 
 def _run_round1(
-    round1_batch: list[CycleItem],
+    round1_batch: list[MemoryEntry],
     *,
     expected_batch_size: int,
     k_labels: int,
@@ -346,13 +352,13 @@ def _run_round1(
 ) -> tuple[list[str], list[bool], int, float, float]:
     """Run round 1 once; return labels, parsed flags, r, eps, delta.
 
-    Every item is one prompt row. Accounting uses the public fixed
+    Every entry is one prompt row. Accounting uses the public fixed
     cycle size rather than deriving ``s`` or ``delta`` from private
     realised counts.
     """
     s = expected_batch_size
     if len(round1_batch) != s:
-        raise ValueError(f"Round 1 requires exactly B={s} items; got {len(round1_batch)}.")
+        raise ValueError(f"Round 1 requires exactly B={s} entries; got {len(round1_batch)}.")
     r = solve_r(target_epsilon, delta, s=s, c=C, tau=TAU, sigma=SIGMA, r_max=R_MAX)
     if r == 0:
         raise RuntimeError(
@@ -362,7 +368,7 @@ def _run_round1(
     eps = epsilon_from_rho(rho_for(r, s, C, TAU, SIGMA), delta)
     _print_round_summary("Round 1", s=s, delta=delta, r=r, eps=eps, target_epsilon=target_epsilon)
 
-    items_blocks = [_render_query_block(item) for item in round1_batch]
+    items_blocks = [_render_query_block(entry) for entry in round1_batch]
     raw, _account = generate(
         items_blocks,
         s=s,
@@ -391,14 +397,14 @@ def _run_round1(
 def _run_round2_for_label(
     *,
     label: str,
-    items: list[CycleItem],
+    entries: list[MemoryEntry],
     expected_batch_size: int,
     target_epsilon: float,
     delta: float,
 ) -> tuple[str, int, float, float, PrivacyAccount] | None:
     """Run one round-2 generate call; return DP content + privacy account.
 
-    Every item assigned to the qualifying label is included. Privacy
+    Every entry assigned to the qualifying label is included. Privacy
     accounting continues to use the fixed threshold as Amin et al.'s
     expected batch size, which need not equal the actual batch size.
 
@@ -424,7 +430,7 @@ def _run_round2_for_label(
         target_epsilon=target_epsilon,
     )
 
-    items_blocks = [_render_item_block(item) for item in items]
+    items_blocks = [_render_item_block(entry) for entry in entries]
     content, account = generate(
         items_blocks,
         s=s,
@@ -446,10 +452,10 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--n-trajectories", type=int, default=N_TRAJECTORIES)
     parser.add_argument(
-        "--items-per-cycle",
+        "--entries-per-cycle",
         type=int,
         required=True,
-        help="Public fixed item count B used by every complete Step-1 cycle.",
+        help="Public fixed entry count B used by every complete Step-1 cycle.",
     )
     parser.add_argument("--k-labels", type=int, default=K_LABELS)
     parser.add_argument("--x-per-label", type=int, default=X_PER_LABEL)
@@ -477,8 +483,8 @@ def main(argv: list[str] | None = None) -> None:
         parser.error("--n-trajectories must be >= 1 unless --skip-trajectories is set.")
     if args.k_labels < 1:
         parser.error("--k-labels must be >= 1.")
-    if args.items_per_cycle < 1:
-        parser.error("--items-per-cycle must be >= 1.")
+    if args.entries_per_cycle < 1:
+        parser.error("--entries-per-cycle must be >= 1.")
     if args.x_per_label < 1:
         parser.error("--x-per-label must be >= 1.")
     if not 0.0 < args.delta <= 1.0:
@@ -515,53 +521,52 @@ def main(argv: list[str] | None = None) -> None:
     else:
         print("[WP2] --skip-trajectories: re-using existing per-user stores.")
 
-    # Flatten private entries into item-level protected examples.
     embedder = Embedder()
     checkpoint = _load_checkpoint(checkpoint_path)
-    consumed_ids: set[str] = set(checkpoint["consumed_item_ids"])
-    step1_processed_ids: set[str] = set(checkpoint["step1_processed_item_ids"])
+    consumed_ids: set[str] = set(checkpoint["consumed_entry_ids"])
+    step1_processed_ids: set[str] = set(checkpoint["step1_processed_entry_ids"])
     carry_over = read_buffer(buffer_path)
 
     step1_processed_ids.update(consumed_ids)
-    new_items, assignment_batch, step1_processed_ids = _assemble_cycle_items(
+    new_entries, assignment_batch, step1_processed_ids = _assemble_cycle_entries(
         memory_dir,
         step1_processed_ids,
         carry_over,
         embedder,
-        items_per_cycle=args.items_per_cycle,
+        entries_per_cycle=args.entries_per_cycle,
     )
     print(
         f"[WP2] Checkpoint: trigger_count={checkpoint['trigger_count']}, "
         f"cumulative_epsilon={checkpoint['cumulative_epsilon']:.4f}, "
         f"cumulative_delta={checkpoint['cumulative_delta']:.3e}, "
-        f"step1_processed_item_ids={len(step1_processed_ids)}, "
-        f"consumed_item_ids={len(consumed_ids)}"
+        f"step1_processed_entry_ids={len(step1_processed_ids)}, "
+        f"consumed_entry_ids={len(consumed_ids)}"
     )
 
     print(
-        f"[WP2] New items: {len(new_items)}; carry-over: {len(carry_over)}; "
+        f"[WP2] New entries: {len(new_entries)}; carry-over: {len(carry_over)}; "
         f"round-2 assignment batch size: {len(assignment_batch)}"
     )
 
     if not assignment_batch:
         print(
-            f"[WP2] Fewer than B={args.items_per_cycle} new items are available; "
+            f"[WP2] Fewer than B={args.entries_per_cycle} new entries are available; "
             "leaving them pending and preserving carry-over."
         )
         return
 
-    # Generate exactly K labels from B new item examples only. Carry-over
-    # items already paid this privacy cost in an earlier trigger.
+    # Generate exactly K labels from B new entry examples only. Carry-over
+    # entries already paid this privacy cost in an earlier trigger.
     labels, label_flags, r_round1, eps_round1, delta_round1 = _run_round1(
-        new_items,
-        expected_batch_size=args.items_per_cycle,
+        new_entries,
+        expected_batch_size=args.entries_per_cycle,
         k_labels=args.k_labels,
         target_epsilon=args.epsilon_per_round,
         delta=args.delta,
     )
-    step1_processed_ids.update(item.item_id for item in new_items)
+    step1_processed_ids.update(entry_id(entry) for entry in new_entries)
 
-    # Reassign both new and held items to the newly generated labels.
+    # Reassign both new and held entries to the newly generated labels.
     assignments = assign_memories_to_labels(assignment_batch, labels, embedder=embedder)
     buckets = group_by_label(assignments, n_labels=args.k_labels)
     print(f"[WP2] Per-label bucket sizes: {[len(b) for b in buckets]}")
@@ -581,7 +586,7 @@ def main(argv: list[str] | None = None) -> None:
     consumed_indices: set[int] = set()
     skipped_round2_indices: list[int] = []
     # Each triggered label's round-2 batch is a disjoint subset of the
-    # assignment dataset (the assignment step routes every item to exactly
+    # assignment dataset (the assignment step routes every entry to exactly
     # one label), so by parallel composition (Amin Lemma 2; WP2-plan
     # §2 line 30 and §4.1 line 169) the round-2 cost for this trigger is
     # max(eps_r2) across labels, not the sum. The per-label values are
@@ -592,26 +597,26 @@ def main(argv: list[str] | None = None) -> None:
     # In a second step, generate the title and description for the shared memory
     for label_idx in gating.triggered_labels:
         label_str = labels[label_idx]
-        item_indices = gating.label_inputs[label_idx]
-        assert item_indices is not None  # triggered_labels filters None out
-        round2_items = [assignment_batch[i] for i in item_indices]
+        entry_indices = gating.label_inputs[label_idx]
+        assert entry_indices is not None  # triggered_labels filters None out
+        round2_entries = [assignment_batch[i] for i in entry_indices]
         result = _run_round2_for_label(
             label=label_str,
-            items=round2_items,
+            entries=round2_entries,
             expected_batch_size=args.x_per_label,
             target_epsilon=args.epsilon_per_round,
             delta=args.delta,
         )
         if result is None:
-            # Round 2 was skipped for budget reasons; the items already
+            # Round 2 was skipped for budget reasons; the entries already
             # paid the round-1 cost but did not contribute to a shared
             # memory. Push them to the carry-over buffer so a future
             # trigger can retry them if the privacy configuration changes.
-            skipped_round2_indices.extend(item_indices)
+            skipped_round2_indices.extend(entry_indices)
             continue
         content, r_r2, eps_r2, delta_r2, account = result
         eps_round2_per_label.append(eps_r2)
-        consumed_indices.update(item_indices)
+        consumed_indices.update(entry_indices)
 
         print(f"[WP2] Round 2 [{label_str!r}] DP content: {content!r}")
         print(
@@ -636,7 +641,7 @@ def main(argv: list[str] | None = None) -> None:
                 "label_idx": label_idx,
                 "label": label_str,
                 "S": args.x_per_label,
-                "actual_batch_size": len(round2_items),
+                "actual_batch_size": len(round2_entries),
                 "r": r_r2,
                 "delta": delta_r2,
                 "eps": eps_r2,
@@ -645,21 +650,21 @@ def main(argv: list[str] | None = None) -> None:
                 "content": content,
                 "private_tokens_used": account.private_tokens_used,
                 "public_tokens_used": account.public_tokens_used,
-                "item_ids": [item.item_id for item in round2_items],
+                "entry_ids": [entry_id(entry) for entry in round2_entries],
             }
         )
 
     carry_indices = list(gating.carry_over) + skipped_round2_indices
-    carry_items = [assignment_batch[i] for i in carry_indices]
-    write_buffer(carry_items, buffer_path)
+    carry_entries = [assignment_batch[i] for i in carry_indices]
+    write_buffer(carry_entries, buffer_path)
     print(
-        f"[WP2] Persisted {len(carry_items)} item(s) to carry-over buffer "
+        f"[WP2] Persisted {len(carry_entries)} entries to carry-over buffer "
         f"({len(gating.carry_over)} from gating + {len(skipped_round2_indices)} "
         f"from round-2 skips)."
     )
 
     for i in consumed_indices:
-        consumed_ids.add(assignment_batch[i].item_id)
+        consumed_ids.add(entry_id(assignment_batch[i]))
 
     # Parallel composition across the disjoint per-label round-2 batches:
     # the trigger-level round-2 cost is max(eps_r2), not sum (WP2-plan §4.1).
@@ -675,8 +680,8 @@ def main(argv: list[str] | None = None) -> None:
     new_checkpoint = {
         "schema_version": CHECKPOINT_SCHEMA_VERSION,
         "last_run_at": _utcnow_iso(),
-        "step1_processed_item_ids": sorted(step1_processed_ids),
-        "consumed_item_ids": sorted(consumed_ids),
+        "step1_processed_entry_ids": sorted(step1_processed_ids),
+        "consumed_entry_ids": sorted(consumed_ids),
         "trigger_count": trigger_idx,
         "cumulative_epsilon": cumulative_epsilon,
         "cumulative_delta": cumulative_delta,
@@ -687,28 +692,28 @@ def main(argv: list[str] | None = None) -> None:
         "trigger_idx": trigger_idx,
         "trigger_at": new_checkpoint["last_run_at"],
         "schema_version": CHECKPOINT_SCHEMA_VERSION,
-        "items_per_cycle": args.items_per_cycle,
+        "entries_per_cycle": args.entries_per_cycle,
         "k_labels": args.k_labels,
         "x_per_label": args.x_per_label,
-        "s1": args.items_per_cycle,
+        "s1": args.entries_per_cycle,
         "s3": args.x_per_label,
         "delta": args.delta,
         "round1": {
-            "S": args.items_per_cycle,
-            "actual_batch_size": len(new_items),
+            "S": args.entries_per_cycle,
+            "actual_batch_size": len(new_entries),
             "r": r_round1,
             "delta": delta_round1,
             "eps": eps_round1,
             "labels": labels,
             "label_parsed_flags": label_flags,
-            "item_ids": [item.item_id for item in new_items],
-            "new_item_count": len(new_items),
+            "entry_ids": [entry_id(entry) for entry in new_entries],
+            "new_entry_count": len(new_entries),
         },
         "round2_assignment": {
-            "item_count": len(assignment_batch),
-            "new_item_count": len(new_items),
-            "carry_over_item_count": len(carry_over),
-            "item_ids": [item.item_id for item in assignment_batch],
+            "entry_count": len(assignment_batch),
+            "new_entry_count": len(new_entries),
+            "carry_over_entry_count": len(carry_over),
+            "entry_ids": [entry_id(entry) for entry in assignment_batch],
             "bucket_sizes": [len(b) for b in buckets],
             "triggered_labels": gating.triggered_labels,
         },
@@ -720,8 +725,8 @@ def main(argv: list[str] | None = None) -> None:
         "n_consumed": len(consumed_indices),
         "n_carryover_gating": len(gating.carry_over),
         "n_carryover_round2_skipped": len(skipped_round2_indices),
-        "n_carryover_total": len(carry_items),
-        "carry_over_item_ids": [item.item_id for item in carry_items],
+        "n_carryover_total": len(carry_entries),
+        "carry_over_entry_ids": [entry_id(entry) for entry in carry_entries],
         "cumulative_epsilon": cumulative_epsilon,
         "cumulative_delta": cumulative_delta,
     }
@@ -730,14 +735,14 @@ def main(argv: list[str] | None = None) -> None:
     print()
     print("=" * 72)
     print(f"[WP2] Trigger {trigger_idx} complete.")
-    print(f"      Round 1: S={args.items_per_cycle}, eps={eps_round1:.4f}")
+    print(f"      Round 1: S={args.entries_per_cycle}, eps={eps_round1:.4f}")
     print(
         f"      Round 2: {len(round2_records)} label(s) wrote shared entries; "
         f"eps_round2_trigger={eps_round2_trigger:.4f} "
         f"(parallel-composed max of per-label eps={[round(e, 4) for e in eps_round2_per_label]})"
     )
-    print(f"      Consumed this trigger: {len(consumed_indices)} item(s)")
-    print(f"      Carried over to next trigger: {len(carry_items)} item(s)")
+    print(f"      Consumed this trigger: {len(consumed_indices)} entries")
+    print(f"      Carried over to next trigger: {len(carry_entries)} entries")
     print(f"      Cumulative epsilon: {cumulative_epsilon:.4f}")
     print(f"      Cumulative delta: {cumulative_delta:.3e}")
     print(f"      Audit log: {audit_path}")

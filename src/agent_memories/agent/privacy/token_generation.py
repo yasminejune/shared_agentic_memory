@@ -182,7 +182,7 @@ def get_next_token_logits(prompts: list[str]) -> torch.Tensor:
         )  # Ids make the lookup easier for the model rather than using the string
         # It also breaks up the prompt into tokens, which the model would have to do seperately otherwise.
         with torch.no_grad():
-            outputs = _model(**inputs)
+            outputs = _model(**inputs, logits_to_keep=1)
         rows.append(outputs.logits[0, -1, :])
         # Picks the the first (and only) item in the batch.
         # Then picks the last position in the sequence, since we are interested in the next token prediction.
@@ -247,6 +247,7 @@ def get_next_token_logits_from_ids(prompt_ids: list[list[int]]) -> torch.Tensor:
             input_ids=input_ids,
             attention_mask=attention_mask,
             use_cache=False,
+            logits_to_keep=1,
         )
     logits: torch.Tensor = outputs.logits[:, -1, :].float()
     return logits
@@ -283,7 +284,12 @@ def prefill_padded(
     single public prompt into one ``s + 1`` batch so the whole
     sampling loop runs as one prefill plus one tiny per-token
     continuation rather than ``s + 1`` independent full-prompt
-    forwards per token.
+    forwards per token. Passes ``logits_to_keep=1`` so Gemma's
+    ``lm_head`` materialises only the last-position logits; the
+    default ``logits_to_keep=0`` keeps every position and on MPS
+    with ``B ~ 100`` long dialogues the ``(batch, seq, vocab)``
+    tensor exceeds Metal's buffer limit (~36 GiB at this project's
+    batch and sequence lengths).
     """
     _load()
     pad_id = int(_tokenizer.pad_token_id)
@@ -295,6 +301,7 @@ def prefill_padded(
             input_ids=input_ids,
             attention_mask=attention_mask,
             use_cache=True,
+            logits_to_keep=1,
         )
     logits = outputs.logits[:, -1, :].float()
     return logits, PrefillState(
@@ -334,6 +341,7 @@ def continue_batched(
             attention_mask=attention_mask,
             past_key_values=state.past_key_values,
             use_cache=True,
+            logits_to_keep=1,
         )
     logits = outputs.logits[:, -1, :].float()
     return logits, PrefillState(

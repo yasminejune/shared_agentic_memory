@@ -19,6 +19,8 @@ from agent_memories.services.mistral_client import MistralClient
 JUDGE_MODEL = "mistral-large-2512"
 JUDGE_MAX_TOKENS = 768
 JUDGE_TEMPERATURE = 0.0
+# Floor sleep before retrying a 429 so retries do not thrash the minute window.
+RATE_LIMIT_RETRY_SLEEP = 60.0
 
 JUDGE_SCORES_COLUMNS = [
     "task_id",
@@ -95,6 +97,12 @@ def score_single_call(
         return 0.0, f"judge_error: {type(exc).__name__}: {exc}"
 
 
+def _is_rate_limited(status: str) -> bool:
+    """True when a judge attempt failed with an HTTP 429 / rate_limited error."""
+    lowered = status.lower()
+    return "429" in status or "rate_limited" in lowered
+
+
 def score_task(
     calls: list[dict[str, Any]],
     deferred_reward: float,
@@ -103,6 +111,10 @@ def score_task(
     sleep_between: float = 1.0,
 ) -> tuple[list[float], float, float, bool, str]:
     """Score all deferred calls for one task.
+
+    ``sleep_between`` is the minimum seconds between API attempts (after every
+    attempt, success or failure). Retries after a 429 wait at least
+    ``RATE_LIMIT_RETRY_SLEEP`` seconds so they do not thrash the minute window.
 
     Returns ``(verdicts, judge_product, final_reward, final_success, status)``.
     """
@@ -114,10 +126,21 @@ def score_task(
         status = "judge_error: exhausted retries"
         for attempt in range(1, max_retries + 1):
             verdict, status = score_single_call(call)
-            if status == "scored" or status == "unparseable":
-                break
-            delay = sleep_between * (2 ** (attempt - 1)) + random.uniform(0, 0.5)
-            time.sleep(delay)
+            done = status == "scored" or status == "unparseable"
+            will_retry = not done and attempt < max_retries
+
+            if will_retry:
+                base = sleep_between * (2 ** (attempt - 1))
+                if _is_rate_limited(status):
+                    delay = max(RATE_LIMIT_RETRY_SLEEP, base)
+                else:
+                    delay = base
+                time.sleep(delay + random.uniform(0, 0.5))
+            else:
+                if sleep_between > 0:
+                    time.sleep(sleep_between)
+                if done:
+                    break
 
         verdicts.append(verdict)
         if status != "scored" and worst_status == "scored":

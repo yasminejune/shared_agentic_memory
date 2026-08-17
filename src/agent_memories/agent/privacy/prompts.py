@@ -6,11 +6,13 @@ same per-token loop in :mod:`agent_memories.agent.privacy.privatisation`:
 * :data:`GENERIC_PROMPT` / :func:`wrap` — round 2 (shared-memory
   synthesis, WP2-plan §3.3 content-only template, 2026-06-02 revision,
   plan §11 deviation 9). The privacy-spending DP path emits only the
-  ``content`` field of a single ReasoningBank ``MemoryItem`` as a
+  ``content`` field of a shared ReasoningBank ``MemoryItem`` as a
   short paragraph of plain prose; the matching ``title`` and
   ``description`` are produced downstream by the §3.5 Qwen
   post-processing call on the DP-released content (free under the
-  post-processing property of differential privacy). The previous
+  post-processing property of differential privacy). Each private
+  prompt row is one trajectory :class:`~agent_memories.memory.MemoryEntry`
+  whose 1-3 distilled items occupy the ``{items}`` slot. The previous
   markdown-scaffolded template (``# [User] / Memory Item: / # [Assistant]``
   with a ``## Title`` anchor) was retired because (a) the schema
   tokens consumed a non-trivial fraction of the per-output ``r``-token
@@ -61,23 +63,15 @@ EXAMPLE_LABELS = (
     "data quality",
 )
 
-GENERIC_ONE_PROMPT = """
-     [ User ]\n
-     Here are agent trajectory memories with Label : {label} .\n
-     Memories: {items}\n
-     Please give me another one .\n
-     # [ Assistant ]\n
-     Memory: """
-
 GENERIC_PROMPT = (
-    "You will be given one memory item distilled from a web-navigation "
-    "trajectory related to {label}. Produce a single short paragraph "
-    "(1 to 3 sentences) that captures the most generalisable lesson "
-    "from this memory item. Output only the lesson text — no title, "
-    "no header, no markdown formatting, no list, no explanation of "
+    "You will be given one or more memory items distilled from a single "
+    "web-navigation trajectory related to {label}. Produce a single short "
+    "paragraph (1 to 3 sentences) that captures the most generalisable "
+    "lesson from these memory items. Output only the lesson text — no "
+    "title, no header, no markdown formatting, no list, no explanation of "
     "what you are doing.\n"
     "\n"
-    "Memory item:\n"
+    "Memory items:\n"
     "{items}\n"
     "\n"
     "Lesson:"

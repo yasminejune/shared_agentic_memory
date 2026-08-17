@@ -207,6 +207,52 @@ def test_score_task_unparseable_status() -> None:
     assert status == "unparseable"
 
 
+@pytest.mark.unit
+def test_score_task_paces_after_successful_attempt() -> None:
+    calls = [
+        {"kind": "fuzzy", "pred": "a", "reference": "r1", "intent": "q"},
+        {"kind": "fuzzy", "pred": "a", "reference": "r2", "intent": "q"},
+    ]
+    results = iter([(1.0, "scored"), (1.0, "scored")])
+
+    def fake_score(call):
+        return next(results)
+
+    with (
+        patch("evaluation.webarena_judge.scorer.score_single_call", side_effect=fake_score),
+        patch("evaluation.webarena_judge.scorer.time.sleep") as sleep_mock,
+    ):
+        score_task(calls, 1.0, max_retries=1, sleep_between=30.0)
+
+    assert sleep_mock.call_count == 2
+    assert all(call.args[0] == 30.0 for call in sleep_mock.call_args_list)
+
+
+@pytest.mark.unit
+def test_score_task_rate_limit_retry_uses_sixty_second_floor() -> None:
+    calls = [{"kind": "fuzzy", "pred": "a", "reference": "r", "intent": "q"}]
+    results = iter(
+        [
+            (0.0, "judge_error: SDKError: Status 429 rate_limited"),
+            (1.0, "scored"),
+        ]
+    )
+
+    def fake_score(call):
+        return next(results)
+
+    with (
+        patch("evaluation.webarena_judge.scorer.score_single_call", side_effect=fake_score),
+        patch("evaluation.webarena_judge.scorer.time.sleep") as sleep_mock,
+        patch("evaluation.webarena_judge.scorer.random.uniform", return_value=0.0),
+    ):
+        score_task(calls, 1.0, max_retries=3, sleep_between=1.0)
+
+    assert sleep_mock.call_count == 2
+    assert sleep_mock.call_args_list[0].args[0] == 60.0
+    assert sleep_mock.call_args_list[1].args[0] == 1.0
+
+
 # ---------------------------------------------------------------------------
 # 3. common.py header guard test
 # ---------------------------------------------------------------------------

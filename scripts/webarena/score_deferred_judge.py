@@ -88,7 +88,12 @@ def main(argv: list[str] | None = None) -> None:
         help="Output judge-scores CSV (default: <calls_stem>_scores.csv)",
     )
     parser.add_argument("--model", type=str, default=JUDGE_MODEL)
-    parser.add_argument("--sleep", type=float, default=1.0, help="Base sleep between retries")
+    parser.add_argument(
+        "--sleep",
+        type=float,
+        default=1.0,
+        help="Minimum seconds between API attempts (success or failure); 429 retries use >=60s",
+    )
     parser.add_argument("--max-retries", type=int, default=3)
     parser.add_argument("--start-id", type=int, default=None)
     parser.add_argument("--end-id", type=int, default=None)

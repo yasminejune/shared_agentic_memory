@@ -1,9 +1,9 @@
 """Standalone smoke for the WP2 X-gating + carry-over buffer.
 
 No LLM and no embedder are involved here -- the gating policy is
-pure logic over item-index lists, and the persistence layer is
-versioned JSONL round-tripping of item-level records. This is the Phase 1.3
-exerciser of :func:`agent_memories.generalisation.select_round2_inputs`
+pure logic over batch-index lists, and the persistence layer is
+versioned JSONL round-tripping of entry-level records. This is the
+Phase 1.3 exerciser of :func:`agent_memories.generalisation.select_round2_inputs`
 and the :func:`write_buffer` / :func:`read_buffer` pair, before the
 WP2 orchestrator wires them in.
 
@@ -11,7 +11,7 @@ The script runs three things and prints the result of each:
 
 1. A small grid of ``(bucket_sizes, X)`` cases through
    :func:`select_round2_inputs` so the gating policy ("pass every
-   item from a triggered label to round 2; set aside every bucket
+   entry from a triggered label to round 2; set aside every bucket
    that did not hit ``X``") is visible at a glance.
 2. A round-trip of a synthetic carry-over list through
    :func:`write_buffer` / :func:`read_buffer` against a temp path
@@ -35,9 +35,8 @@ from pathlib import Path
 
 from agent_memories.config import DEFAULT_MEMORY_DIR
 from agent_memories.generalisation import (
-    CycleItem,
     GatingResult,
-    flatten_entry,
+    entry_id,
     read_buffer,
     select_round2_inputs,
     write_buffer,
@@ -47,18 +46,18 @@ from agent_memories.memory import MemoryEntry, MemoryItem
 DEFAULT_BUFFER_PATH = DEFAULT_MEMORY_DIR / ".shared_buffer_test.jsonl"
 
 
-def _fake_item(user_id: str, query: str, *, dim: int = 4) -> CycleItem:
-    """Construct a deterministic item-level record for buffer tests.
+def _fake_entry(user_id: str, query: str, *, dim: int = 4) -> MemoryEntry:
+    """Construct a deterministic entry-level record for buffer tests.
 
     The embedding is a tiny ``dim``-vector seeded by ``hash(query)``
     so the JSONL serialiser has something to write but the test
-    does not depend on a real :class:`Embedder`. The item carries
+    does not depend on a real :class:`Embedder`. The entry carries
     plausible-looking title / description / content strings so a
     visual inspection of the persisted JSONL reads naturally.
     """
     seed = abs(hash(query)) % 997
     embedding = [float((seed + i) % 13) / 13.0 for i in range(dim)]
-    entry = MemoryEntry(
+    return MemoryEntry(
         user_id=user_id,
         query=query,
         outcome="successful",
@@ -72,7 +71,6 @@ def _fake_item(user_id: str, query: str, *, dim: int = 4) -> CycleItem:
         embedding=embedding,
         created_at="2026-01-01T00:00:00+00:00",
     )
-    return flatten_entry(entry)[0]
 
 
 def _format_gating(result: GatingResult) -> str:
@@ -113,9 +111,9 @@ def _run_roundtrip(path: Path) -> bool:
     print(f"Persistence round-trip via {path}:")
     print("=" * 72)
     original = [
-        _fake_item("user_00", "Find cheapest hairbrush on Amazon"),
-        _fake_item("user_01", "Browse search results for hairbrush"),
-        _fake_item("user_02", "Look up reviews for hairbrush"),
+        _fake_entry("user_00", "Find cheapest hairbrush on Amazon"),
+        _fake_entry("user_01", "Browse search results for hairbrush"),
+        _fake_entry("user_02", "Look up reviews for hairbrush"),
     ]
     write_buffer(original, path)
     loaded = read_buffer(path)
@@ -123,12 +121,12 @@ def _run_roundtrip(path: Path) -> bool:
     matched = len(loaded) == len(original) and all(
         a.to_jsonl_dict() == b.to_jsonl_dict() for a, b in zip(loaded, original, strict=True)
     )
-    print(f"Wrote {len(original)} item(s); reloaded {len(loaded)}; equal={matched}")
-    for item in loaded:
+    print(f"Wrote {len(original)} entries; reloaded {len(loaded)}; equal={matched}")
+    for entry in loaded:
         print(
-            f"  user={item.user_id} query={item.query!r} "
-            f"outcome={item.outcome} item_index={item.item_index} "
-            f"embedding_dim={len(item.embedding)}"
+            f"  user={entry.user_id} query={entry.query!r} "
+            f"outcome={entry.outcome} entry_id={entry_id(entry)!r} "
+            f"embedding_dim={len(entry.embedding or [])}"
         )
     return matched
 
@@ -139,21 +137,22 @@ def _run_orchestrator_glue(path: Path) -> None:
     print("=" * 72)
     print("End-of-trigger orchestrator glue (gating -> carry_over -> persist):")
     print("=" * 72)
-    items = [
-        _fake_item(f"user_{i:02d}", f"Task {i}: search the web for some product") for i in range(7)
+    entries = [
+        _fake_entry(f"user_{i:02d}", f"Task {i}: search the web for some product")
+        for i in range(7)
     ]
     buckets = [[0, 1, 2, 3], [4, 5], [6]]  # 3 labels, sizes 4/2/1
     x = 3
     result = select_round2_inputs(buckets, x_per_label=x)
     print(f"Labels triggered (bucket size >= X={x}): {result.triggered_labels}")
-    print(f"Carry-over item indices: {result.carry_over}")
+    print(f"Carry-over entry indices: {result.carry_over}")
 
-    carry_items = [items[i] for i in result.carry_over]
-    write_buffer(carry_items, path)
+    carry_entries = [entries[i] for i in result.carry_over]
+    write_buffer(carry_entries, path)
     reloaded = read_buffer(path)
-    print(f"Persisted {len(carry_items)} carry-over items; reloaded {len(reloaded)}.")
-    for item in reloaded:
-        print(f"  carry-over: user={item.user_id} query={item.query!r}")
+    print(f"Persisted {len(carry_entries)} carry-over entries; reloaded {len(reloaded)}.")
+    for entry in reloaded:
+        print(f"  carry-over: user={entry.user_id} query={entry.query!r}")
 
 
 def main(argv: list[str] | None = None) -> None:

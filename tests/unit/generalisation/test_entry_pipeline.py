@@ -1,4 +1,4 @@
-"""Unit tests for item-level WP2 batching and privacy accounting."""
+"""Unit tests for entry-level WP2 batching and privacy accounting."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from scripts.memories import WP2_pipeline
 
 from agent_memories.generalisation import (
     assign_memories_to_labels,
-    flatten_entry,
+    entry_id,
     read_buffer,
     write_buffer,
 )
@@ -44,12 +44,12 @@ def _entry(
             )
             for i in range(n_items)
         ],
-        embedding=embedding or [1.0, 0.0],
+        embedding=embedding if embedding is not None else [1.0, 0.0],
         created_at=created_at,
     )
 
 
-def test_flatten_entry_makes_each_memory_item_a_separate_example() -> None:
+def test_entry_id_omits_item_index() -> None:
     entry = _entry(
         "user_00",
         "Find a product",
@@ -57,16 +57,10 @@ def test_flatten_entry_makes_each_memory_item_a_separate_example() -> None:
         n_items=3,
     )
 
-    items = flatten_entry(entry)
-
-    assert len(items) == 3
-    assert [item.item_index for item in items] == [0, 1, 2]
-    assert len({item.item_id for item in items}) == 3
-    assert [item.item.title for item in items] == ["Title 0", "Title 1", "Title 2"]
-    assert all(item.query == entry.query for item in items)
+    assert entry_id(entry) == "user_00::Find a product::2026-08-10T10:00:00+00:00"
 
 
-def test_cycle_assembly_takes_exactly_b_items_and_splits_parent_entries(tmp_path) -> None:
+def test_cycle_assembly_takes_whole_entries_not_sibling_items(tmp_path) -> None:
     first = _entry(
         "user_00",
         "First task",
@@ -78,38 +72,41 @@ def test_cycle_assembly_takes_exactly_b_items_and_splits_parent_entries(tmp_path
         "Second task",
         "2026-08-10T11:00:00+00:00",
     )
-    for entry in (first, second):
+    third = _entry(
+        "user_02",
+        "Third task",
+        "2026-08-10T12:00:00+00:00",
+    )
+    for entry in (first, second, third):
         path = tmp_path / f"{entry.user_id}.jsonl"
         path.write_text(json.dumps(entry.to_jsonl_dict()) + "\n", encoding="utf-8")
 
-    new_items, assignment_batch, processed_ids = WP2_pipeline._assemble_cycle_items(
+    new_entries, assignment_batch, processed_ids = WP2_pipeline._assemble_cycle_entries(
         tmp_path,
         set(),
         [],
         _UnusedEmbedder(),
-        items_per_cycle=2,
+        entries_per_cycle=2,
     )
 
-    assert [item.item_index for item in new_items] == [0, 1]
-    assert assignment_batch == new_items
+    assert [entry.query for entry in new_entries] == ["First task", "Second task"]
+    assert assignment_batch == new_entries
     assert processed_ids == set()
+    assert all(len(entry.items) == expected for entry, expected in zip(new_entries, (3, 1)))
 
-    processed_ids.update(item.item_id for item in new_items)
-    next_items, _, _ = WP2_pipeline._assemble_cycle_items(
+    processed_ids.update(entry_id(entry) for entry in new_entries)
+    next_entries, _, _ = WP2_pipeline._assemble_cycle_entries(
         tmp_path,
         processed_ids,
         [],
         _UnusedEmbedder(),
-        items_per_cycle=2,
+        entries_per_cycle=2,
     )
 
-    assert [(item.user_id, item.item_index) for item in next_items] == [
-        ("user_00", 2),
-        ("user_01", 0),
-    ]
+    assert next_entries == []
 
 
-def test_cycle_waits_when_fewer_than_b_new_items_are_available(tmp_path) -> None:
+def test_cycle_waits_when_fewer_than_b_new_entries_are_available(tmp_path) -> None:
     entry = _entry(
         "user_00",
         "Only task",
@@ -121,76 +118,98 @@ def test_cycle_waits_when_fewer_than_b_new_items_are_available(tmp_path) -> None
         encoding="utf-8",
     )
 
-    new_items, assignment_batch, processed_ids = WP2_pipeline._assemble_cycle_items(
+    new_entries, assignment_batch, processed_ids = WP2_pipeline._assemble_cycle_entries(
         tmp_path,
         set(),
         [],
         _UnusedEmbedder(),
-        items_per_cycle=3,
+        entries_per_cycle=3,
     )
 
-    assert new_items == []
+    assert new_entries == []
     assert assignment_batch == []
     assert processed_ids == set()
 
 
-def test_item_buffer_round_trips_and_rejects_legacy_entry_records(tmp_path) -> None:
-    item = flatten_entry(_entry("user_00", "Task", "2026-08-10T10:00:00+00:00"))[0]
-    path = tmp_path / ".shared_buffer.jsonl"
-
-    write_buffer([item], path)
-
-    assert read_buffer(path) == [item]
-
-    path.write_text(
-        json.dumps(_entry("user_00", "Legacy", "2026-08-09T10:00:00+00:00").to_jsonl_dict()) + "\n",
-        encoding="utf-8",
+def test_missing_embedding_raises_when_loading_entries(tmp_path) -> None:
+    entry = _entry(
+        "user_00",
+        "Task",
+        "2026-08-10T10:00:00+00:00",
+        embedding=None,
     )
-    with pytest.raises(ValueError, match="legacy entry-level"):
-        read_buffer(path)
+    payload = entry.to_jsonl_dict()
+    payload["embedding"] = None
+    (tmp_path / "user_00.jsonl").write_text(json.dumps(payload) + "\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="has no query embedding"):
+        WP2_pipeline._load_per_user_entries(tmp_path, set(), _UnusedEmbedder())
 
 
-def test_checkpoint_rejects_legacy_entry_level_state(tmp_path) -> None:
-    path = tmp_path / ".shared_state.json"
-    path.write_text(
-        json.dumps({"step1_processed_entry_ids": ["legacy-entry"]}),
-        encoding="utf-8",
+def test_assignment_raises_on_missing_embedding() -> None:
+    entry = _entry(
+        "user_00",
+        "Task",
+        "2026-08-10T10:00:00+00:00",
     )
-
-    with pytest.raises(RuntimeError, match="legacy entry-level"):
-        WP2_pipeline._load_checkpoint(path)
-
-
-def test_assignment_treats_sibling_items_as_separate_rows() -> None:
-    items = flatten_entry(
-        _entry(
-            "user_00",
-            "Task",
-            "2026-08-10T10:00:00+00:00",
-            n_items=3,
-        )
-    )
+    entry.embedding = None
 
     class _Embedder:
         def embed_batch(self, texts: list[str]) -> list[list[float]]:
-            assert texts == ["Label"]
-            return [[1.0, 0.0]]
+            return [[1.0, 0.0] for _ in texts]
 
-    assignments = assign_memories_to_labels(items, ["Label"], embedder=_Embedder())
-
-    assert len(assignments) == 3
-    assert [assignment.item_index for assignment in assignments] == [0, 1, 2]
+    with pytest.raises(ValueError, match="has no query embedding"):
+        assign_memories_to_labels([entry], ["Label"], embedder=_Embedder())
 
 
-def test_round1_uses_b_and_one_prompt_row_per_item(monkeypatch) -> None:
-    items = flatten_entry(
+def test_entry_buffer_round_trips_and_rejects_item_level_records(tmp_path) -> None:
+    entry = _entry("user_00", "Task", "2026-08-10T10:00:00+00:00", n_items=2)
+    path = tmp_path / ".shared_buffer.jsonl"
+
+    write_buffer([entry], path)
+
+    assert read_buffer(path) == [entry]
+
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "user_id": "user_00",
+                "query": "Legacy",
+                "outcome": "successful",
+                "item": {"title": "T", "description": "D", "content": "C"},
+                "item_index": 0,
+                "embedding": [1.0, 0.0],
+                "created_at": "2026-08-09T10:00:00+00:00",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="legacy item-level"):
+        read_buffer(path)
+
+
+def test_checkpoint_rejects_legacy_item_level_state(tmp_path) -> None:
+    path = tmp_path / ".shared_state.json"
+    path.write_text(
+        json.dumps({"schema_version": 2, "step1_processed_item_ids": ["legacy-item"]}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(RuntimeError, match="legacy item-level"):
+        WP2_pipeline._load_checkpoint(path)
+
+
+def test_round1_uses_one_prompt_row_per_entry(monkeypatch) -> None:
+    entries = [
         _entry(
             "user_00",
             "Repeated parent query",
             "2026-08-10T10:00:00+00:00",
             n_items=3,
         )
-    )
+    ]
     observed: dict[str, object] = {}
 
     monkeypatch.setattr(WP2_pipeline, "solve_r", lambda *args, **kwargs: 1)
@@ -206,29 +225,29 @@ def test_round1_uses_b_and_one_prompt_row_per_item(monkeypatch) -> None:
     )
 
     WP2_pipeline._run_round1(
-        items,
-        expected_batch_size=3,
+        entries,
+        expected_batch_size=1,
         k_labels=1,
         target_epsilon=5.0,
         delta=1e-5,
     )
 
     assert observed == {
-        "texts": ["Repeated parent query"] * 3,
-        "s": 3,
+        "texts": ["Repeated parent query"],
+        "s": 1,
         "delta": 1e-5,
     }
 
 
-def test_round2_uses_x_and_one_prompt_row_per_item(monkeypatch) -> None:
-    items = flatten_entry(
+def test_round2_uses_one_numbered_block_per_entry(monkeypatch) -> None:
+    entries = [
         _entry(
             "user_00",
             "Task",
             "2026-08-10T10:00:00+00:00",
             n_items=3,
         )
-    )
+    ]
     observed: dict[str, object] = {}
 
     monkeypatch.setattr(WP2_pipeline, "solve_r", lambda *args, **kwargs: 1)
@@ -245,7 +264,7 @@ def test_round2_uses_x_and_one_prompt_row_per_item(monkeypatch) -> None:
 
     WP2_pipeline._run_round2_for_label(
         label="search",
-        items=items,
+        entries=entries,
         expected_batch_size=2,
         target_epsilon=5.0,
         delta=1e-5,
@@ -253,16 +272,16 @@ def test_round2_uses_x_and_one_prompt_row_per_item(monkeypatch) -> None:
 
     assert observed == {
         "texts": [
-            "Title 0 | Description 0. | Content 0.",
-            "Title 1 | Description 1. | Content 1.",
-            "Title 2 | Description 2. | Content 2.",
+            "Memory 1: Title 0 | Description 0. | Content 0.\n"
+            "Memory 2: Title 1 | Description 1. | Content 1.\n"
+            "Memory 3: Title 2 | Description 2. | Content 2."
         ],
         "s": 2,
         "delta": 1e-5,
     }
 
 
-def test_pipeline_audit_keeps_expected_and_actual_item_counts_separate(
+def test_pipeline_audit_counts_entries_not_sibling_items(
     tmp_path,
     monkeypatch,
 ) -> None:
@@ -317,12 +336,12 @@ def test_pipeline_audit_keeps_expected_and_actual_item_counts_separate(
     WP2_pipeline.main(
         [
             "--skip-trajectories",
-            "--items-per-cycle",
-            "3",
+            "--entries-per-cycle",
+            "1",
             "--k-labels",
             "1",
             "--x-per-label",
-            "2",
+            "1",
             "--delta",
             "1e-5",
             "--memory-dir",
@@ -334,21 +353,22 @@ def test_pipeline_audit_keeps_expected_and_actual_item_counts_separate(
     checkpoint = json.loads((tmp_path / ".shared_state.json").read_text(encoding="utf-8"))
 
     assert generate_calls == [
-        {"texts": ["Task", "Task", "Task"], "s": 3, "delta": 1e-5},
+        {"texts": ["Task"], "s": 1, "delta": 1e-5},
         {
             "texts": [
-                "Title 0 | Description 0. | Content 0.",
-                "Title 1 | Description 1. | Content 1.",
-                "Title 2 | Description 2. | Content 2.",
+                "Memory 1: Title 0 | Description 0. | Content 0.\n"
+                "Memory 2: Title 1 | Description 1. | Content 1.\n"
+                "Memory 3: Title 2 | Description 2. | Content 2."
             ],
-            "s": 2,
+            "s": 1,
             "delta": 1e-5,
         },
     ]
-    assert audit["s1"] == 3
-    assert audit["s3"] == 2
-    assert audit["round1"]["actual_batch_size"] == 3
-    assert audit["round2_per_label"][0]["actual_batch_size"] == 3
-    assert len(audit["round2_per_label"][0]["item_ids"]) == 3
+    assert audit["s1"] == 1
+    assert audit["s3"] == 1
+    assert audit["round1"]["actual_batch_size"] == 1
+    assert audit["round2_per_label"][0]["actual_batch_size"] == 1
+    assert audit["round2_per_label"][0]["entry_ids"] == [entry_id(entry)]
     assert audit["trigger_delta"] == pytest.approx(2e-5)
     assert checkpoint["cumulative_delta"] == pytest.approx(2e-5)
+    assert checkpoint["schema_version"] == 3

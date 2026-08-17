@@ -3,9 +3,9 @@
 Reads ``K`` DP-released label strings from
 ``scripts/amin_et_al/outputs/labels.jsonl`` (produced by
 ``scripts/amin_et_al/WP2_8.py``) and every per-user
-:class:`MemoryItem` it can find under ``data/memories/<user_id>.jsonl``,
+:class:`MemoryEntry` it can find under ``data/memories/<user_id>.jsonl``,
 then runs :func:`agent_memories.generalisation.assign_memories_to_labels`
-to assign each item to its nearest label by cosine similarity over
+to assign each entry to its nearest label by cosine similarity over
 the WP1.6 ``query`` embedding (already stored on each entry) against
 freshly-computed label embeddings (same ``all-MiniLM-L6-v2`` model).
 
@@ -14,7 +14,7 @@ function the WP2 orchestrator depends on (WP2-plan §3.2 / §4.3
 round-2 batch assignment). No DP cost is touched here -- the labels
 are already DP-released and the assignment is pure post-processing.
 
-Output: the per-label bucket sizes and the (user_id, query, item_index,
+Output: the per-label bucket sizes and the (user_id, query,
 assigned_label_index, label_string, similarity) tuples printed to
 stdout, so the human can spot-check that semantically related
 memories cluster under the same label before wiring the orchestrator
@@ -29,13 +29,11 @@ from pathlib import Path
 
 from agent_memories.config import DEFAULT_MEMORY_DIR
 from agent_memories.generalisation import (
-    CycleItem,
     LabelAssignment,
     assign_memories_to_labels,
-    flatten_entry,
     group_by_label,
 )
-from agent_memories.memory import Embedder, MemoryStore
+from agent_memories.memory import Embedder, MemoryEntry, MemoryStore
 
 DEFAULT_LABELS_PATH = Path("scripts/amin_et_al/outputs/labels.jsonl")
 
@@ -62,11 +60,11 @@ def _load_labels(path: Path) -> list[str]:
     return labels
 
 
-def _load_all_user_items(
+def _load_all_user_entries(
     memory_dir: Path,
     embedder: Embedder,
-) -> list[CycleItem]:
-    """Return every item-level protected example under ``memory_dir``.
+) -> list[MemoryEntry]:
+    """Return every trajectory entry under ``memory_dir``.
 
     Each entry already carries its own ``user_id`` (set by
     :meth:`MemoryStore.add_entry` from the store's own ``self.user_id``),
@@ -80,40 +78,39 @@ def _load_all_user_items(
     ``.shared_buffer.jsonl``, ``.shared_state.json``) all lack the
     ``user_`` prefix and are therefore excluded automatically.
     """
-    items: list[CycleItem] = []
+    entries: list[MemoryEntry] = []
     for path in sorted(memory_dir.glob("user_*.jsonl")):
         store = MemoryStore.load(path, user_id=path.stem, embedder=embedder)
-        for entry in store.all():
-            items.extend(flatten_entry(entry))
-    return items
+        entries.extend(store.all())
+    return entries
 
 
 def _print_summary(
     labels: list[str],
-    items: list[CycleItem],
+    entries: list[MemoryEntry],
     assignments: list[LabelAssignment],
 ) -> None:
-    """Pretty-print buckets, then per-memory assignments, to stdout."""
+    """Pretty-print buckets, then per-entry assignments, to stdout."""
     buckets = group_by_label(assignments, n_labels=len(labels))
 
     print()
     print("=" * 72)
-    print(f"Per-label bucket sizes (K={len(labels)}, N_items={len(items)}):")
+    print(f"Per-label bucket sizes (K={len(labels)}, N_entries={len(entries)}):")
     print("=" * 72)
     for label_idx, bucket in enumerate(buckets):
         print(f"  [{label_idx}] ({len(bucket):>2}) {labels[label_idx]!r}")
 
     print()
     print("=" * 72)
-    print("Per-memory assignments:")
+    print("Per-entry assignments:")
     print("=" * 72)
     for assignment in assignments:
-        item = items[assignment.item_index]
+        entry = entries[assignment.item_index]
         label_str = labels[assignment.label_index]
-        query_preview = (item.query[:60] + "...") if len(item.query) > 60 else item.query
+        query_preview = (entry.query[:60] + "...") if len(entry.query) > 60 else entry.query
         print(
-            f"  user={item.user_id:<12} "
-            f"item={item.item_index} "
+            f"  user={entry.user_id:<12} "
+            f"n_items={len(entry.items)} "
             f"label_idx={assignment.label_index} "
             f"sim={assignment.similarity:+.3f} "
             f"label={label_str!r:<40} "
@@ -151,8 +148,8 @@ def main(argv: list[str] | None = None) -> None:
         parser.error(f"No labels parsed from {args.labels_path}.")
 
     embedder = Embedder()
-    items = _load_all_user_items(args.memory_dir, embedder)
-    if not items:
+    entries = _load_all_user_entries(args.memory_dir, embedder)
+    if not entries:
         parser.error(
             f"No per-user memory entries found under {args.memory_dir}. "
             "Run scripts/memories/run_multi_trajectory.py (or WP1_5.py) "
@@ -161,11 +158,12 @@ def main(argv: list[str] | None = None) -> None:
 
     print(f"Loaded {len(labels)} label(s) from {args.labels_path}")
     print(
-        f"Loaded {len(items)} memory item(s) across {len({item.user_id for item in items})} user store(s)"
+        f"Loaded {len(entries)} memory entries across "
+        f"{len({entry.user_id for entry in entries})} user store(s)"
     )
 
-    assignments = assign_memories_to_labels(items, labels, embedder=embedder)
-    _print_summary(labels, items, assignments)
+    assignments = assign_memories_to_labels(entries, labels, embedder=embedder)
+    _print_summary(labels, entries, assignments)
 
 
 if __name__ == "__main__":

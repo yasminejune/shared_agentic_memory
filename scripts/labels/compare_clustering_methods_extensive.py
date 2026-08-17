@@ -70,16 +70,14 @@ belongs to the WP4.5 privacy-utility sweep, on a larger corpus where
 smooth-sensitivity sampling is meaningful and the comparison metric is
 downstream retrieval / task success rather than cluster structure.
 
-The toy fixture is :data:`EXAMPLES_PATH` (10 short event-review strings,
-shared with the rest of ``scripts/amin_et_al/``). The same script handles a
-larger corpus without code changes: point ``--examples`` at a different CSV
-with an ``id,text`` schema and the four methods will rerun. The only
-constant that *should* be retuned manually when N grows is the Amin DP
-batch-size :data:`S`; it currently matches the toy fixture's 10 rows. The
-``R_MAX`` cap on private-token budget is independent of N. The
-privacy-free Amin loop's :data:`MAX_TOTAL_TOKENS` is a hard cap on the
-total decoded length and is also independent of N. See the inline comments
-on each constant for the retune rationale.
+The fixture is :data:`EXAMPLES_PATH` (10 short event-review strings,
+shared with the rest of ``scripts/amin_et_al/``) repeated 10 times so
+``N = S = 100``. The only constant that *should* be retuned manually
+when N grows is the Amin DP batch-size :data:`S`. The ``R_MAX`` cap on
+private-token budget is independent of N. The privacy-free Amin loop's
+:data:`MAX_TOTAL_TOKENS` is a hard cap on the total decoded length and
+is also independent of N. See the inline comments on each constant for
+the retune rationale.
 
 ``amin_dp`` calls production :func:`~agent_memories.agent.privacy.generate`
 (the KV-cache ``prefill_padded`` + ``continue_batched`` path used by
@@ -89,7 +87,11 @@ forwards in chunks of ``--gemma-chunk-size`` (default
 :data:`GEMMA_CHUNK_SIZE_DEFAULT`) without KV-cache reuse so peak memory
 drops from ``O(N * seq_len)`` to ``O(gemma_chunk_size * seq_len)``.
 ``amin_nodp`` always uses the microbatched helper because it has no
-production twin in ``privatisation``.
+production twin in ``privatisation``. ``invisible_ink`` calls production
+:func:`~agent_memories.agent.invisible_ink.generate` the same way, and
+on the same OOM falls back to
+:func:`~agent_memories.agent.invisible_ink.generate_microbatched`
+(chunked via the same ``--gemma-chunk-size``).
 
 The script writes one JSONL record per method to
 :data:`OUTPUTS_PATH` in overwrite mode (so the file always reflects the
@@ -111,16 +113,24 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import pandas as pd
 import torch
 from bertopic import BERTopic
 from bertopic.dimensionality import BaseDimensionalityReduction
-from datasets import load_dataset
 from hdbscan import HDBSCAN
 from invink.utils import cdp_eps
 from sklearn.cluster import KMeans as SklearnKMeans
 from umap import UMAP
 
-from agent_memories.agent.invisible_ink import generate as generate_invisible_ink
+from agent_memories.agent.invisible_ink import (
+    InvisibleInkAccount,
+)
+from agent_memories.agent.invisible_ink import (
+    generate as generate_invisible_ink,
+)
+from agent_memories.agent.invisible_ink import (
+    generate_microbatched as generate_invisible_ink_microbatched,
+)
 from agent_memories.agent.privacy import (
     check_delta,
     epsilon_from_rho,
@@ -142,10 +152,10 @@ from agent_memories.memory import Embedder
 
 # Amin DP / privacy-free hyperparameters. Values mirror
 # scripts/amin_et_al/WP2_8.py so the DP path runs at the same privacy
-# operating point as the existing round-1 harness. If `--examples` is
-# pointed at a larger CSV, S should be raised to match the new N (the Amin
-# privacy proof bounds depend on the expected batch size); R_MAX is
-# independent of N and rarely needs retuning.
+# operating point as the existing round-1 harness. S matches the 10-row
+# toy fixture repeated 10 times (N = 100); the Amin privacy proof bounds
+# depend on the expected batch size. R_MAX is independent of N and rarely
+# needs retuning.
 S = 100
 C = 20.0
 TAU = 1.0
@@ -163,7 +173,7 @@ K_DEFAULT = 4
 SEED_DEFAULT = 0
 # Max sensitive prompts per Gemma forward pass. The Amin average is identical
 # whether logits are computed in one batch or accumulated over chunks; chunking
-# only caps peak GPU memory (batch=100 on long dialogues can exceed 30 GiB).
+# only caps peak GPU memory (batch=100 can exceed 30 GiB).
 GEMMA_CHUNK_SIZE_DEFAULT = 8
 # InvisibleInk defaults. EPSILON_II_DEFAULT is the authors' recommended
 # operating point (invink README); Amin needs EPSILON_DEFAULT=200 to stay
@@ -181,7 +191,9 @@ ALL_METHODS: tuple[str, ...] = (
     "invisible_ink",
 )
 
+EXAMPLES_PATH = Path("scripts/amin_et_al/examples.csv")
 OUTPUTS_PATH = Path("scripts/amin_et_al/outputs/cluster_comparison_extensive.jsonl")
+TOY_REPEAT = 10
 
 MODEL_NAME = "google/gemma-2-2b-it"
 
@@ -435,6 +447,52 @@ def _generate_dp(
         return raw_output, account, "microbatched"
 
 
+def _generate_ii(
+    texts: list[str],
+    *,
+    k: int,
+    epsilon: float,
+    top_k: int,
+    b: int,
+    tau: float,
+    max_tokens: int,
+    delta: float,
+    gemma_chunk_size: int,
+) -> tuple[str, InvisibleInkAccount, str]:
+    """InvisibleInk via production KV-cache path, microbatched fallback on OOM.
+
+    Returns ``(decoded_output, account, engine)`` where ``engine`` is
+    ``"production"`` or ``"microbatched"`` for the JSONL ``extra`` field.
+    """
+    gen_kwargs: dict[str, Any] = {
+        "b": b,
+        "tau": tau,
+        "top_k": top_k,
+        "max_total_tokens": max_tokens,
+        "target_epsilon": epsilon,
+        "delta": delta,
+        "wrap_fn": wrap_label,
+        "k": k,
+    }
+    print("  invisible_ink: trying production generate (KV-cache path)...")
+    try:
+        raw_output, account = generate_invisible_ink(texts, **gen_kwargs)
+        return raw_output, account, "production"
+    except RuntimeError as exc:
+        if not _is_oom_error(exc):
+            raise
+        print(
+            f"  invisible_ink: KV-cache path OOM ({exc}); "
+            f"falling back to microbatched (chunk_size={gemma_chunk_size})..."
+        )
+        raw_output, account = generate_invisible_ink_microbatched(
+            texts,
+            chunk_size=gemma_chunk_size,
+            **gen_kwargs,
+        )
+        return raw_output, account, "microbatched"
+
+
 def run_amin_privacy_free(
     texts: list[str],
     *,
@@ -611,6 +669,7 @@ def run_invisible_ink(
     tau: float,
     max_tokens: int,
     delta: float,
+    gemma_chunk_size: int,
 ) -> ClusteringResult:
     """Variant 6: InvisibleInk Algorithm 1, parsed via the production JSON parser.
 
@@ -625,17 +684,18 @@ def run_invisible_ink(
         f"  invisible_ink: target epsilon = {epsilon}, delta = {delta}, "
         f"b={b}, tau={tau}, top_k={top_k}, max_tokens={max_tokens}"
     )
-    raw_output, account = generate_invisible_ink(
+    raw_output, account, ii_engine = _generate_ii(
         texts,
+        k=k,
+        epsilon=epsilon,
+        top_k=top_k,
         b=b,
         tau=tau,
-        top_k=top_k,
-        max_total_tokens=max_tokens,
-        target_epsilon=epsilon,
+        max_tokens=max_tokens,
         delta=delta,
-        wrap_fn=wrap_label,
-        k=k,
+        gemma_chunk_size=gemma_chunk_size,
     )
+    print(f"  invisible_ink: completed via {ii_engine} engine.")
     print(
         f"  invisible_ink: tokens_used={account.tokens_used}/{account.t}, "
         f"C={account.c:.6f}, spent epsilon={account.epsilon:.4f}, "
@@ -665,6 +725,8 @@ def run_invisible_ink(
         "topk_plus_mean": account.topk_plus_mean,
         "topk_plus_std": account.topk_plus_std,
         "expansion_set_count": account.expansion_set_count,
+        "ii_engine": ii_engine,
+        "gemma_chunk_size": gemma_chunk_size,
         "n_batch_members": len(texts),
         "raw_output": raw_output,
         "label_parsed": label_parsed,
@@ -1047,9 +1109,10 @@ def main() -> None:
         type=int,
         default=GEMMA_CHUNK_SIZE_DEFAULT,
         help=(
-            "Max sensitive prompts per Gemma forward pass for amin_nodp and "
-            "for amin_dp when the production KV-cache path OOMs and the "
-            f"microbatched fallback kicks in (default: {GEMMA_CHUNK_SIZE_DEFAULT})."
+            "Max sensitive prompts per Gemma forward pass for amin_nodp, "
+            "for amin_dp when the production KV-cache path OOMs, and for "
+            "invisible_ink when its production KV-cache path OOMs "
+            f"(default: {GEMMA_CHUNK_SIZE_DEFAULT})."
         ),
     )
     parser.add_argument(
@@ -1113,12 +1176,12 @@ def main() -> None:
     if not (0.0 < args.ii_delta < 1.0):
         parser.error("--ii-delta must be in (0, 1).")
 
-    # Load the dataset
-    dataset = load_dataset("nayohan/multi_session_chat")
-    df = dataset["train"][:100]
-    texts: list[str] = [str(t) for t in df["dialogue"]]
+    df = pd.read_csv(EXAMPLES_PATH)
+    if "text" not in df.columns:
+        parser.error(f"{EXAMPLES_PATH} must have a `text` column.")
+    texts: list[str] = [str(t) for t in df["text"].tolist()] * TOY_REPEAT
     if not texts:
-        parser.error("dataset is empty.")
+        parser.error(f"{EXAMPLES_PATH} is empty.")
 
     ii_batch_size = args.ii_batch_size if args.ii_batch_size is not None else len(texts)
     if ii_batch_size < 1:
@@ -1127,7 +1190,10 @@ def main() -> None:
         parser.error(f"--ii-batch-size ({ii_batch_size}) exceeds number of texts ({len(texts)}).")
     ii_texts = texts[:ii_batch_size]
 
-    print(f"Loaded {len(texts)} texts from dataset.")
+    print(
+        f"Loaded {len(texts)} texts from {EXAMPLES_PATH} "
+        f"({len(texts) // TOY_REPEAT} unique rows × {TOY_REPEAT})."
+    )
     print(
         f"Running methods: {args.methods} at k={args.k} "
         f"(gemma_chunk_size={args.gemma_chunk_size})."
@@ -1194,6 +1260,7 @@ def main() -> None:
                 tau=args.ii_tau,
                 max_tokens=args.ii_max_tokens,
                 delta=args.ii_delta,
+                gemma_chunk_size=args.gemma_chunk_size,
             )
         )
 
