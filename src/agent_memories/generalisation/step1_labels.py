@@ -91,9 +91,25 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     csv_path, work_dir = resolve_io_paths(args)
+    out = labels_path(work_dir)
+    print("[Step 1] InvisibleInk label generation", flush=True)
+    print(f"[Step 1] memories CSV: {csv_path}", flush=True)
+    print(f"[Step 1] work dir:     {work_dir}", flush=True)
+    print(f"[Step 1] output:       {out}", flush=True)
+
     pairs = load_memory_entries_from_csv(csv_path)
     entries = [entry for _, entry in pairs]
-    print(f"[Step 1] Loaded {len(entries)} extracted tasks from {csv_path}")
+    print(f"[Step 1] Loaded {len(entries)} extracted tasks", flush=True)
+    print(
+        f"[Step 1] k={args.k_labels}, b={len(entries)}, "
+        f"epsilon={args.epsilon}, delta={args.delta}, tau={args.tau}, "
+        f"top_k={args.top_k}, T={args.max_tokens}, chunk_size={args.chunk_size}",
+        flush=True,
+    )
+    print(
+        "[Step 1] Starting generation (loads Gemma 2 2B IT; this can take a long time)...",
+        flush=True,
+    )
     artefact = run_label_generation(
         entries,
         k=args.k_labels,
@@ -104,16 +120,18 @@ def main(argv: list[str] | None = None) -> None:
         max_total_tokens=args.max_tokens,
         chunk_size=args.chunk_size,
     )
-    out = labels_path(work_dir)
     write_json(out, artefact)
-    print(f"[Step 1] engine={artefact['engine']} b={artefact['b']} k={artefact['k']}")
-    print(f"[Step 1] Wrote {len(artefact['labels'])} labels to {out}")
+    print(
+        f"[Step 1] engine={artefact['engine']} b={artefact['b']} k={artefact['k']}",
+        flush=True,
+    )
+    print(f"[Step 1] Wrote {len(artefact['labels'])} labels to {out}", flush=True)
     for idx, (label, ok) in enumerate(
         zip(artefact["labels"], artefact["label_parsed_flags"], strict=True),
         start=1,
     ):
         tag = "" if ok else "  [fallback]"
-        print(f"    {idx}. {label}{tag}")
+        print(f"    {idx}. {label}{tag}", flush=True)
 
 
 if __name__ == "__main__":

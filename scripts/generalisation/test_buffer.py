@@ -138,8 +138,7 @@ def _run_orchestrator_glue(path: Path) -> None:
     print("End-of-trigger orchestrator glue (gating -> carry_over -> persist):")
     print("=" * 72)
     entries = [
-        _fake_entry(f"user_{i:02d}", f"Task {i}: search the web for some product")
-        for i in range(7)
+        _fake_entry(f"user_{i:02d}", f"Task {i}: search the web for some product") for i in range(7)
     ]
     buckets = [[0, 1, 2, 3], [4, 5], [6]]  # 3 labels, sizes 4/2/1
     x = 3

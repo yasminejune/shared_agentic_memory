@@ -89,7 +89,9 @@ def add_io_arguments(parser: argparse.ArgumentParser) -> None:
 
 def resolve_io_paths(args: argparse.Namespace) -> tuple[Path, Path]:
     """Return ``(memories_csv, work_dir)`` from parsed CLI args."""
-    csv_path = args.memories_csv if args.memories_csv is not None else memories_csv_for_run(args.run)
+    csv_path = (
+        args.memories_csv if args.memories_csv is not None else memories_csv_for_run(args.run)
+    )
     work_dir = args.work_dir if args.work_dir is not None else work_dir_for_run(args.run)
     return csv_path, work_dir
 

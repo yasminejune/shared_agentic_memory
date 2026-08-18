@@ -326,9 +326,7 @@ def generate_microbatched(
 def _is_oom_error(exc: BaseException) -> bool:
     """True when ``exc`` looks like GPU / MPS memory exhaustion."""
     msg = str(exc).lower()
-    return any(
-        needle in msg for needle in ("out of memory", "buffer size", "oom", "mps backend")
-    )
+    return any(needle in msg for needle in ("out of memory", "buffer size", "oom", "mps backend"))
 
 
 def generate_with_oom_fallback(
@@ -344,11 +342,17 @@ def generate_with_oom_fallback(
     both call sites (``b``, ``tau``, ``top_k``, ``max_total_tokens``,
     ``target_epsilon``, ``delta``, ``wrap_fn``, wrap kwargs).
     """
+    print("  invisible_ink: trying production generate (KV-cache path)...", flush=True)
     try:
         raw, account = generate(texts, **kwargs)
         return raw, account, "production"
     except RuntimeError as exc:
         if not _is_oom_error(exc):
             raise
+        print(
+            f"  invisible_ink: KV-cache path OOM ({exc}); "
+            f"falling back to microbatched (chunk_size={chunk_size})...",
+            flush=True,
+        )
         raw, account = generate_microbatched(texts, chunk_size=chunk_size, **kwargs)
         return raw, account, "microbatched"

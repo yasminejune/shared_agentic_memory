@@ -125,12 +125,8 @@ def test_step1_prompts_use_query_not_items() -> None:
 
 def test_step2_gates_at_seven(tmp_path: Path) -> None:
     labels = ["label-a", "label-b"]
-    a_entries = [
-        _entry(f"ua{i}", f"task a {i}", embedding=[1.0, 0.0]) for i in range(7)
-    ]
-    b_entries = [
-        _entry(f"ub{i}", f"task b {i}", embedding=[0.0, 1.0]) for i in range(2)
-    ]
+    a_entries = [_entry(f"ua{i}", f"task a {i}", embedding=[1.0, 0.0]) for i in range(7)]
+    b_entries = [_entry(f"ub{i}", f"task b {i}", embedding=[0.0, 1.0]) for i in range(2)]
     artefact = run_assignment(
         a_entries + b_entries,
         labels,
@@ -171,6 +167,8 @@ def test_step3_accounts_at_b_seven_with_larger_bucket() -> None:
     assert records[0]["content"] == "A generalisable lesson."
     assert records[0]["actual_batch_size"] == 9
     assert records[0]["accounting_b"] == 7
+    assert records[0]["chunk_index"] == 0
+    assert len(records) == 1
 
 
 def test_step3_renders_memory_items_not_queries() -> None:
@@ -198,10 +196,42 @@ def test_step3_renders_memory_items_not_queries() -> None:
         assert f"QUERY {i}" not in block
 
 
+@pytest.mark.parametrize(
+    "n, expected_sizes",
+    [
+        (7, [7]),
+        (10, [10]),
+        (15, [7, 8]),
+    ],
+)
+def test_step3_splits_large_buckets(n: int, expected_sizes: list[int]) -> None:
+    calls: list[int] = []
+
+    def fake_generate(texts: list[str], **kwargs: object) -> tuple[str, InvisibleInkAccount, str]:
+        calls.append(len(texts))
+        return f"lesson-{len(calls)}", _account(), "production"
+
+    entries = [_entry(f"u{i}", f"task {i}", embedding=[1.0, 0.0]) for i in range(n)]
+    qualifying = [
+        {
+            "label_index": 0,
+            "label": "label-a",
+            "entries": [entry.to_jsonl_dict() for entry in entries],
+        }
+    ]
+    records = run_content_generation(qualifying, accounting_b=7, generate_fn=fake_generate)
+    assert calls == expected_sizes
+    assert [record["actual_batch_size"] for record in records] == expected_sizes
+    assert [record["chunk_index"] for record in records] == list(range(len(expected_sizes)))
+    assert all(record["label"] == "label-a" for record in records)
+    assert all(record["accounting_b"] == 7 for record in records)
+    written_ids = [eid for record in records for eid in record["entry_ids"]]
+    assert written_ids == [entry_id(entry) for entry in entries]
+
+
 def test_step4_writes_shared_store(tmp_path: Path) -> None:
     client = _FakeClient(
-        "Title: Confirm Venue Before Paying\n"
-        "Description: Check the issuer page before paying.\n"
+        "Title: Confirm Venue Before Paying\n" "Description: Check the issuer page before paying.\n"
     )
     records = [
         {

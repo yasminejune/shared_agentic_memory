@@ -16,7 +16,19 @@ cross-user store. Nothing else in this package should need to change.
 """
 
 from .embedder import Embedder
-from .pipeline import MemoryPipeline
 from .store import MemoryEntry, MemoryItem, MemoryStore
 
 __all__ = ["Embedder", "MemoryItem", "MemoryEntry", "MemoryStore", "MemoryPipeline"]
+
+
+def __getattr__(name: str) -> object:
+    """Load :class:`MemoryPipeline` only when a caller asks for it.
+
+    Importing ``MemoryEntry`` (Step 1) must not pull LangGraph via the
+    WP1.6 pipeline module.
+    """
+    if name == "MemoryPipeline":
+        from .pipeline import MemoryPipeline
+
+        return MemoryPipeline
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
