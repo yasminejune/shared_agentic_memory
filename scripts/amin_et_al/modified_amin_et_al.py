@@ -12,8 +12,8 @@ import math
 import pandas as pd
 import torch
 
-from agent_memories.agent.privacy import token_generation as tg
-from agent_memories.agent.privacy.prompts import wrap
+from agent_memories.agent.lm import token_generation as tg
+from agent_memories.agent.lm.prompts import wrap
 
 B = 10  # number of private references (paper B)
 TAU = 1.0  # sampling temperature

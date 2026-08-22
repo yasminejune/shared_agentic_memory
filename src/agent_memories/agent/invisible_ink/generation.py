@@ -1,7 +1,7 @@
 """InvisibleInk Algorithm 1 (Vinod et al., arXiv:2507.02974).
 
 Token-by-token DP generation for Step 1 labels and Step 3 shared-memory
-content. Shares Gemma plumbing and prompt templates with agent/privacy/.
+content. Shares Gemma plumbing and prompt templates with agent/lm/.
 Does not call ``invink.generate``: that path loads its own model and
 emits ``num`` sequences from disjoint partitions, which does not fit
 one JSON array of ``k`` labels from one batch of ``B`` references.
@@ -30,8 +30,8 @@ from typing import Any
 import numpy as np
 import torch
 
-from ..privacy import token_generation as tg
-from ..privacy.prompts import wrap
+from ..lm import token_generation as tg
+from ..lm.prompts import wrap
 from .accounting import (
     InvisibleInkAccount,
     clip_for_budget,

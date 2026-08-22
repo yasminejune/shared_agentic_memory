@@ -14,9 +14,9 @@ import numpy as np
 import pandas as pd
 import torch
 
-from agent_memories.agent.privacy.privatisation import clip_recenter
-from agent_memories.agent.privacy.prompts import wrap_label
-from agent_memories.agent.privacy.token_generation import (
+from agent_memories.agent.amin_et_al.privatisation import clip_recenter
+from agent_memories.agent.lm.prompts import wrap_label
+from agent_memories.agent.lm.token_generation import (
     continue_batched,
     decode,
     encode_chat,

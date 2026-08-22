@@ -13,9 +13,9 @@ from __future__ import annotations
 import pandas as pd
 import torch
 
-from agent_memories.agent.privacy import token_generation as tg
-from agent_memories.agent.privacy.privatisation import clip_recenter
-from agent_memories.agent.privacy.prompts import wrap
+from agent_memories.agent.amin_et_al.privatisation import clip_recenter
+from agent_memories.agent.lm import token_generation as tg
+from agent_memories.agent.lm.prompts import wrap
 
 C = 10.0  # logit clip bound, matches WP2_3.py for apples-to-apples comparison
 MAX_TOTAL_TOKENS = 80

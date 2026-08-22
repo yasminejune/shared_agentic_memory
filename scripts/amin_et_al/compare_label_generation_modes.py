@@ -23,20 +23,20 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from agent_memories.agent.privacy import (
+from agent_memories.agent.amin_et_al import (
     check_delta,
     epsilon_from_rho,
     generate,
     rho_for,
     solve_r,
 )
-from agent_memories.agent.privacy import token_generation as tg
-from agent_memories.agent.privacy.privacy_accounting import PrivacyAccount
-from agent_memories.agent.privacy.privatisation import (
+from agent_memories.agent.amin_et_al.accounting import PrivacyAccount
+from agent_memories.agent.amin_et_al.privatisation import (
     sample_private,
     sample_public,
     softmax_l1_distance,
 )
+from agent_memories.agent.lm import token_generation as tg
 
 S = 100  # expected Amin batch size, not the toy CSV row count
 C = 50.0  # logit clip

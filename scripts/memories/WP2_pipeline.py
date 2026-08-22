@@ -16,14 +16,14 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from agent_memories.agent.privacy import (
+from agent_memories.agent.amin_et_al import (
     PrivacyAccount,
     epsilon_from_rho,
     generate,
     rho_for,
     solve_r,
 )
-from agent_memories.agent.privacy.prompts import wrap, wrap_label
+from agent_memories.agent.lm.prompts import wrap, wrap_label
 from agent_memories.config import DEFAULT_MEMORY_DIR, load_random_seed
 from agent_memories.generalisation import (
     assign_memories_to_labels,

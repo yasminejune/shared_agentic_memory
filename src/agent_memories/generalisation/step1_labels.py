@@ -11,7 +11,7 @@ from typing import Any
 
 from agent_memories.agent.invisible_ink import generate_with_oom_fallback
 from agent_memories.agent.invisible_ink.accounting import InvisibleInkAccount
-from agent_memories.agent.privacy.prompts import wrap_label
+from agent_memories.agent.lm.prompts import wrap_label
 from agent_memories.generalisation.buffer import entry_id
 from agent_memories.generalisation.io import (
     DELTA,

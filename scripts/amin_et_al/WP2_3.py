@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from agent_memories.agent.privacy import check_delta, generate, rho_for, solve_r
+from agent_memories.agent.amin_et_al import check_delta, generate, rho_for, solve_r
 
 S = 10  # batch size
 C = 10.0  # clip value

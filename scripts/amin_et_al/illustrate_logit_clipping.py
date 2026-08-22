@@ -14,9 +14,9 @@ import numpy as np
 import pandas as pd
 import torch
 
-from agent_memories.agent.privacy.privatisation import clip_recenter
-from agent_memories.agent.privacy.prompts import wrap_label
-from agent_memories.agent.privacy.token_generation import decode, encode_chat, prefill_padded
+from agent_memories.agent.amin_et_al.privatisation import clip_recenter
+from agent_memories.agent.lm.prompts import wrap_label
+from agent_memories.agent.lm.token_generation import decode, encode_chat, prefill_padded
 
 EXAMPLES_PATH = Path("scripts/amin_et_al/examples.csv")
 DEFAULT_OUTPUT_DIR = Path("scripts/amin_et_al/outputs")

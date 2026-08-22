@@ -46,6 +46,20 @@ from invink.utils import cdp_eps
 from sklearn.cluster import KMeans as SklearnKMeans
 from umap import UMAP
 
+from agent_memories.agent.amin_et_al import (
+    check_delta,
+    epsilon_from_rho,
+    generate,
+    rho_for,
+    solve_r,
+)
+from agent_memories.agent.amin_et_al.accounting import PrivacyAccount
+from agent_memories.agent.amin_et_al.privatisation import (
+    clip_recenter,
+    sample_private,
+    sample_public,
+    softmax_l1_distance,
+)
 from agent_memories.agent.invisible_ink import (
     InvisibleInkAccount,
 )
@@ -55,22 +69,8 @@ from agent_memories.agent.invisible_ink import (
 from agent_memories.agent.invisible_ink import (
     generate_microbatched as generate_invisible_ink_microbatched,
 )
-from agent_memories.agent.privacy import (
-    check_delta,
-    epsilon_from_rho,
-    generate,
-    rho_for,
-    solve_r,
-)
-from agent_memories.agent.privacy import token_generation as tg
-from agent_memories.agent.privacy.privacy_accounting import PrivacyAccount
-from agent_memories.agent.privacy.privatisation import (
-    clip_recenter,
-    sample_private,
-    sample_public,
-    softmax_l1_distance,
-)
-from agent_memories.agent.privacy.prompts import wrap_label
+from agent_memories.agent.lm import token_generation as tg
+from agent_memories.agent.lm.prompts import wrap_label
 from agent_memories.generalisation import parse_json_labels
 from agent_memories.memory import Embedder
 
@@ -240,7 +240,7 @@ def _generate_dp_microbatched(
 ) -> tuple[str, PrivacyAccount]:
     """Amin Algorithm 1 with micro-batched sensitive forwards.
 
-    Same algorithm as agent_memories.agent.privacy.privatisation.generate,
+    Same algorithm as agent_memories.agent.amin_et_al.privatisation.generate,
     but never stacks all sensitive prompts into one prefill_padded
     batch. Re-tokenises the running suffix each step (no KV-cache),
     so memory stays O(gemma_chunk_size * seq_len).

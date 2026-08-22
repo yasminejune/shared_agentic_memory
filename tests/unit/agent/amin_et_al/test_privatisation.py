@@ -8,8 +8,8 @@ from typing import Any
 import pytest
 import torch
 
-from agent_memories.agent.privacy import privatisation as pv
-from agent_memories.agent.privacy.privacy_accounting import (
+from agent_memories.agent.amin_et_al import privatisation as pv
+from agent_memories.agent.amin_et_al.accounting import (
     PrivacyAccount,
     epsilon_from_rho,
     rho_for,

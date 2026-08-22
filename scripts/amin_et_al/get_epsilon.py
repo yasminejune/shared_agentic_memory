@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from agent_memories.agent.privacy.privacy_accounting import get_epsilon
+from agent_memories.agent.amin_et_al.accounting import get_epsilon
 
 
 def main():

@@ -1,4 +1,4 @@
-"""Gemma 2 2B IT logit wrapper for Amin et al. Algorithm 1.
+"""Gemma 2 2B IT logit wrapper shared by the Amin sampler and InvisibleInk.
 
 Loads ``google/gemma-2-2b-it`` lazily in bfloat16 on MPS, applies the
 chat template, and returns last-position logits as float32. Prefill

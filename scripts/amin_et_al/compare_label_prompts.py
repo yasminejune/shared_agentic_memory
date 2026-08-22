@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from agent_memories.agent.privacy import (
+from agent_memories.agent.amin_et_al import (
     check_delta,
     epsilon_from_rho,
     generate,

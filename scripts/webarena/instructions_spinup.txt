@@ -36,7 +36,7 @@ Required before `import browsergym.webarena`. Installed automatically by `make i
 
 Step A — agent trajectories only (tasks 0–4 first):
 
-  python scripts/webarena/run_webarena_no_memories.py --start-id 0 --end-id 4
+  python scripts/webarena/run_webarena.py --condition A --start-id 0 --end-id 4
 
 Step B — judge + memory extraction + embeddings from trajectories:
 
@@ -44,8 +44,19 @@ Step B — judge + memory extraction + embeddings from trajectories:
 
 Full corpus (812 tasks, multi-day):
 
-  python scripts/webarena/run_webarena.py
+  python scripts/webarena/run_webarena.py --condition A
   python scripts/webarena/build_memories_from_trajectories.py
+
+--condition selects the memory condition and its output CSV:
+
+  A  no memories        data/webarena/trajectories_A_no_memories.csv
+  B  private            data/webarena/trajectories_B_private_run.csv
+  C  shared             data/webarena/trajectories_C_shared_only.csv
+  D  private + shared   data/webarena/trajectories_D_private_shared.csv
+
+B and D read data/webarena/trajectories_reasoningbank_private_memories.csv, so
+step B must have run first. C and D read data/memories/shared.jsonl, which the
+InvisibleInk pipeline writes.
 
 Resume: each script skips task_ids already completed in its own output CSV.
 

@@ -42,13 +42,17 @@ Same loop with private-memory retrieval and a post-run ReasoningBank write:
 venv/bin/python scripts/memories/WP1_5.py --model qwen --k 1
 ```
 
-WebArena with no memories (tasks 0-811 by default). Needs the `WA_*` URLs, Ollama, and `RANDOM_SEED`:
+WebArena batch runs (tasks 0-811 by default). Needs the `WA_*` URLs, Ollama, and `RANDOM_SEED`:
 
 ```bash
-venv/bin/python scripts/webarena/run_webarena_no_memories.py --start-id 0 --end-id 0
+venv/bin/python scripts/webarena/run_webarena.py --condition A --start-id 0 --end-id 0
 ```
 
-The other batch conditions sit next to that script: `run_webarena_with_private_memories.py`, `run_webarena_with_shared_memories.py`, and `run_webarena_with_private_shared_memories.py`. After a run, score deferred judge calls with:
+`--condition` picks the memory condition: `A` no memories, `B` private, `C` shared,
+`D` private plus shared. Each writes its own CSV under `data/webarena/` and skips
+tasks already recorded as `ok`, so an interrupted run resumes. `--k` sets how many
+memories are retrieved (default 3, ignored by `A`). After a run, score deferred
+judge calls with:
 
 ```bash
 venv/bin/python scripts/webarena/score_deferred_judge.py --calls <calls.jsonl>

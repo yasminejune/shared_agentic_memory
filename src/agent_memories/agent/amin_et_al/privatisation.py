@@ -18,9 +18,9 @@ from typing import Any
 import numpy as np
 import torch
 
-from . import token_generation as tg
-from .privacy_accounting import PrivacyAccount, epsilon_from_rho, rho_for, solve_r
-from .prompts import wrap
+from ..lm import token_generation as tg
+from ..lm.prompts import wrap
+from .accounting import PrivacyAccount, epsilon_from_rho, rho_for, solve_r
 
 
 def clip_recenter(Z: torch.Tensor, c: float) -> torch.Tensor:  # noqa: N803

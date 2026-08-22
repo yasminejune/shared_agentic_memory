@@ -11,14 +11,15 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import httpx
+import numpy as np
 import requests
 
 if TYPE_CHECKING:
-    from agent_memories.memory import MemoryEntry
+    from agent_memories.memory import Embedder, MemoryEntry
 
 from agent_memories.agent.browsergym.env import make_webarena_env
 from agent_memories.agent.state import AgentState
-from agent_memories.config import REPO_ROOT
+from agent_memories.config import DEFAULT_MEMORY_DIR, REPO_ROOT
 from agent_memories.services.ollama_client import DEFAULT_BASE_URL
 
 QWEN_MODEL = "qwen3.5:4b-nvfp4"
@@ -82,11 +83,19 @@ MEMORY_RUN_CSV_COLUMNS = [
     "retrieved_memory_titles",
 ]
 
+# source ("private" or "shared"), audit key (task id or DP label), entry
+MemoryRecord = tuple[str, "int | str", "MemoryEntry"]
+
 DEFAULT_TRAJECTORIES_CSV = REPO_ROOT / "data" / "webarena" / "trajectories_A_no_memories.csv"
 DEFAULT_MEMORIES_CSV = (
     REPO_ROOT / "data" / "webarena" / "trajectories_reasoningbank_private_memories.csv"
 )
 DEFAULT_MEMORY_RUN_CSV = REPO_ROOT / "data" / "webarena" / "trajectories_B_private_run.csv"
+DEFAULT_SHARED_RUN_CSV = REPO_ROOT / "data" / "webarena" / "trajectories_C_shared_only.csv"
+DEFAULT_PRIVATE_SHARED_RUN_CSV = (
+    REPO_ROOT / "data" / "webarena" / "trajectories_D_private_shared.csv"
+)
+DEFAULT_SHARED_STORE = DEFAULT_MEMORY_DIR / "shared.jsonl"
 DEFAULT_INFRA_LOG = REPO_ROOT / "data" / "webarena" / "infra_errors.log"
 DEFAULT_MAX_STEPS = 30
 # Agent Think calls with think=True can run to tens of seconds on a shared
@@ -335,6 +344,65 @@ def load_memory_entries_from_csv(csv_path: Path) -> list[tuple[int, MemoryEntry]
             entry.embedding = [float(x) for x in embedding]
             pairs.append((int(task_id_raw), entry))
     return pairs
+
+
+def load_private_records(csv_path: Path) -> list[MemoryRecord]:
+    """Private memories from the ReasoningBank CSV, keyed by source task_id."""
+    return [
+        ("private", task_id, entry) for task_id, entry in load_memory_entries_from_csv(csv_path)
+    ]
+
+
+def load_shared_records(store_path: Path, embedder: Embedder) -> list[MemoryRecord]:
+    """Shared memories from the JSONL store, keyed by DP label."""
+    from agent_memories.memory import MemoryStore
+
+    store = MemoryStore.load(store_path, user_id="shared", embedder=embedder)
+    return [("shared", entry.query, entry) for entry in store.all() if entry.embedding is not None]
+
+
+class MemoryIndex:
+    """Cosine top-k over private and/or shared memory records.
+
+    Every condition retrieves the same way; only the record list differs.
+    MemoryStore.search runs the same _cosine_top_k call, so shared entries
+    are indexed here rather than searched through the store.
+    """
+
+    def __init__(self, records: list[MemoryRecord], embedder: Embedder) -> None:
+        self._records = records
+        self._embedder = embedder
+        self._matrix = np.asarray(
+            [entry.embedding for _, _, entry in records],
+            dtype=np.float32,
+        )
+
+    def __len__(self) -> int:
+        return len(self._records)
+
+    def search(self, intent: str, *, k: int) -> list[MemoryRecord]:
+        """Return the top-k records by cosine similarity to intent."""
+        if not self._records or k <= 0:
+            return []
+        from agent_memories.memory.store import _cosine_top_k
+
+        query_vec = np.asarray(self._embedder.embed(intent), dtype=np.float32)
+        indices = _cosine_top_k(query_vec, self._matrix, k)
+        return [self._records[i] for i in indices]
+
+
+def audit_ids(records: list[MemoryRecord]) -> list[int | str]:
+    """Audit keys in rank order: private task ids, shared DP labels."""
+    return [key for _, key, _ in records]
+
+
+def flatten_records_for_think(records: list[MemoryRecord]) -> list[dict[str, str]]:
+    """Flatten records to the {title, content} list Think expects."""
+    flat: list[dict[str, str]] = []
+    for _, _, entry in records:
+        for item in entry.items:
+            flat.append({"title": item.title, "content": item.content})
+    return flat
 
 
 def judge_calls_path(csv_path: Path) -> Path:

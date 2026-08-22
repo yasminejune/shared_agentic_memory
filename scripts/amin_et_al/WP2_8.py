@@ -13,14 +13,14 @@ from pathlib import Path
 
 import pandas as pd
 
-from agent_memories.agent.privacy import (
+from agent_memories.agent.amin_et_al import (
     check_delta,
     epsilon_from_rho,
     generate,
     rho_for,
     solve_r,
 )
-from agent_memories.agent.privacy.prompts import wrap_label
+from agent_memories.agent.lm.prompts import wrap_label
 from agent_memories.generalisation import parse_numbered_labels as parse_labels
 
 S = 10  # batch size (10 examples)

@@ -54,16 +54,16 @@ from hdbscan import HDBSCAN
 from sklearn.cluster import KMeans as SklearnKMeans
 from umap import UMAP
 
-from agent_memories.agent.privacy import (
+from agent_memories.agent.amin_et_al import (
     check_delta,
     epsilon_from_rho,
     generate,
     rho_for,
     solve_r,
 )
-from agent_memories.agent.privacy import token_generation as tg
-from agent_memories.agent.privacy.privatisation import clip_recenter
-from agent_memories.agent.privacy.prompts import wrap_label
+from agent_memories.agent.amin_et_al.privatisation import clip_recenter
+from agent_memories.agent.lm import token_generation as tg
+from agent_memories.agent.lm.prompts import wrap_label
 from agent_memories.generalisation import parse_json_labels
 from agent_memories.memory import Embedder
 

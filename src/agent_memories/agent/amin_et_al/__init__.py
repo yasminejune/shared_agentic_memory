@@ -1,6 +1,12 @@
-"""Amin et al. (2024) sampler, Gemma 2 2B IT wrapper, zCDP accountant, and shared prompts."""
+"""Amin et al. (2024) Algorithm 1 sampler and its zCDP accountant.
 
-from .privacy_accounting import (
+Sequence-level DP over a batch of s private prompts, with a sparse-vector
+check that falls back to a public prompt when the private and public next
+token distributions agree. Shares the Gemma wrapper and prompt templates
+with agent/lm/.
+"""
+
+from .accounting import (
     DeltaCheck,
     PrivacyAccount,
     check_delta,
