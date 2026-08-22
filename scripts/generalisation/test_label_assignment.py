@@ -1,24 +1,14 @@
-"""Standalone smoke for the WP2 round-1 label -> round-2 batch assignment.
+"""Smoke the round-1 label -> round-2 cosine assignment.
 
-Reads ``K`` DP-released label strings from
-``scripts/amin_et_al/outputs/labels.jsonl`` (produced by
-``scripts/amin_et_al/WP2_8.py``) and every per-user
-:class:`MemoryEntry` it can find under ``data/memories/<user_id>.jsonl``,
-then runs :func:`agent_memories.generalisation.assign_memories_to_labels`
-to assign each entry to its nearest label by cosine similarity over
-the WP1.6 ``query`` embedding (already stored on each entry) against
-freshly-computed label embeddings (same ``all-MiniLM-L6-v2`` model).
+Reads K labels from scripts/amin_et_al/outputs/labels.jsonl
+(WP2_8.py) and every user_*.jsonl under data/memories/, then
+assign_memories_to_labels. Embeddings on the entries are already
+there; labels get a fresh all-MiniLM-L6-v2 pass.
 
-This is the Phase 1.2 stand-alone exerciser of the assignment
-function the WP2 orchestrator depends on (WP2-plan §3.2 / §4.3
-round-2 batch assignment). No DP cost is touched here -- the labels
-are already DP-released and the assignment is pure post-processing.
-
-Output: the per-label bucket sizes and the (user_id, query,
-assigned_label_index, label_string, similarity) tuples printed to
-stdout, so the human can spot-check that semantically related
-memories cluster under the same label before wiring the orchestrator
-to it. No JSONL is written.
+No privacy cost: labels are already released, assignment is
+post-processing. Prints bucket sizes and (user, query, label, sim)
+so I can see whether related memories land together. Nothing is
+written.
 """
 
 from __future__ import annotations
@@ -39,15 +29,12 @@ DEFAULT_LABELS_PATH = Path("scripts/amin_et_al/outputs/labels.jsonl")
 
 
 def _load_labels(path: Path) -> list[str]:
-    """Read one label string per line from ``WP2_8.py``'s JSONL output.
+    """Read one label string per line from WP2_8.py's JSONL.
 
-    The JSONL schema is ``{"index": int, "label": str, "parsed":
-    bool, "created_at": str}`` per ``WP2_8.parse_labels``; we only
-    need the ``label`` field for assignment. Fallback ``label_<i>``
-    entries (``parsed = false``) are kept in the list because the
-    round-2 pipeline still receives ``k`` labels and a fallback
-    label is a legitimate cosine-similarity target even if it is
-    not very informative.
+    Schema is ``{"index", "label", "parsed", "created_at"}``; only
+    ``label`` is used. Fallback ``label_<i>`` rows (parsed=false) stay
+    in the list because round 2 still expects K labels, and a dull
+    fallback is still a cosine target.
     """
     labels: list[str] = []
     with path.open("r", encoding="utf-8") as fh:
@@ -64,19 +51,13 @@ def _load_all_user_entries(
     memory_dir: Path,
     embedder: Embedder,
 ) -> list[MemoryEntry]:
-    """Return every trajectory entry under ``memory_dir``.
+    """Every trajectory entry under ``memory_dir``.
 
-    Each entry already carries its own ``user_id`` (set by
-    :meth:`MemoryStore.add_entry` from the store's own ``self.user_id``),
-    so the smoke-test reads it off the entry directly rather than
-    re-deriving it from the filename.
+    Each entry already carries ``user_id`` from MemoryStore.add_entry,
+    so this reads it off the record rather than from the filename.
 
-    Only ``<memory_dir>/user_*.jsonl`` is considered, matching the
-    allow-list pattern used by ``scripts/memories/WP2_pipeline.py``'s
-    ``_load_per_user_entries``. The WP2 shared cross-user store
-    (``shared.jsonl``) and its hidden sidecars (``.shared_audit.jsonl``,
-    ``.shared_buffer.jsonl``, ``.shared_state.json``) all lack the
-    ``user_`` prefix and are therefore excluded automatically.
+    Only ``user_*.jsonl`` (same allow-list as WP2_pipeline.py).
+    shared.jsonl and the hidden sidecars do not match that prefix.
     """
     entries: list[MemoryEntry] = []
     for path in sorted(memory_dir.glob("user_*.jsonl")):
@@ -90,7 +71,7 @@ def _print_summary(
     entries: list[MemoryEntry],
     assignments: list[LabelAssignment],
 ) -> None:
-    """Pretty-print buckets, then per-entry assignments, to stdout."""
+    """Bucket sizes first, then per-entry assignments."""
     buckets = group_by_label(assignments, n_labels=len(labels))
 
     print()

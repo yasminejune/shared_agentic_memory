@@ -1,105 +1,29 @@
-"""Side-by-side cluster comparison: privacy-free Amin, DP Amin, k-means, BERTopic.
+"""Larger bucketing ablation: Amin, k-means, BERTopic, InvisibleInk.
 
-Sense-check harness that reads N memory texts from a CSV, produces k clusters
-via each of four methods on the same inputs and the same k, assigns every
-memory to its nearest cluster, and prints per-cluster membership plus the
-cluster's label. The four methods isolate different axes of the WP2 round-1
-labelling design:
+Same idea as compare_clustering_methods_simple.py but the 10 toy
+reviews are repeated 10 times (N = S = 100) and InvisibleInk
+(Vinod et al., arXiv:2507.02974) sits next to Amin as a second DP
+mechanism. I run this when I care about OOM behaviour and the
+mechanism switch, not when I want a quick look at labels.
 
-* ``amin_nodp`` — privacy-free Amin Algorithm 1 with the production
-  :func:`~agent_memories.agent.privacy.prompts.wrap_label` template and the
-  production :func:`~agent_memories.generalisation.parse_json_labels` parser.
-  The DP machinery is stripped (no Laplace noise, no SVT, no ``r`` budget),
-  so this isolates "labels from an LLM averaging the inputs" from "DP noise
-  on top of that". Mirrors :mod:`scripts.amin_et_al.simplified_amin`'s
-  clip+mean+softmax+multinomial loop with ``wrap_label`` instead of
-  :func:`~agent_memories.agent.privacy.prompts.wrap`.
-* ``amin_dp`` — the production round-1 path, same call shape as
-  :mod:`scripts.amin_et_al.WP2_8` (Amin Algorithm 1 with the SVT public-token
-  trick, ``r`` and ``epsilon`` derived via :func:`solve_r`). Together with
-  ``amin_nodp`` this lets the reviewer see how much of the cluster
-  structure shifts under DP noise alone, with everything else held fixed.
-* ``kmeans`` — spherical k-means: L2-normalise the
-  ``sentence-transformers/all-MiniLM-L6-v2`` embeddings used elsewhere in the
-  project so Euclidean k-means approximates cosine similarity (matching the
-  geometry of the round-2 batch-assignment step in
-  :mod:`~agent_memories.generalisation.assignment`). Post-hoc label per
-  cluster is the input text nearest the cluster's centroid, truncated to
-  four words for visual parity with the Amin labels.
-* ``bertopic`` — BERTopic with the HDBSCAN clusterer swapped for
-  ``sklearn.cluster.KMeans(n_clusters=k)`` and UMAP disabled via
-  :class:`bertopic.dimensionality.BaseDimensionalityReduction`. With both
-  stages neutered, the clustering itself becomes the same KMeans as method
-  three; the only thing BERTopic adds on top is the c-TF-IDF label
-  extraction (top-four discriminative terms per cluster). That isolates the
-  labelling layer cleanly: any difference between ``kmeans`` and
-  ``bertopic`` is attributable to c-TF-IDF labelling alone, since both run
-  KMeans on identical pre-computed embeddings.
-* ``bertopic_pure`` — BERTopic with its default UMAP and HDBSCAN backends,
-  parameterised adaptively to the input size so the script still runs at
-  the 10-row toy fixture (``UMAP(n_neighbors=min(15, N - 1))``,
-  ``HDBSCAN(min_cluster_size=max(2, min(10, N // 3)))``) and collapses to
-  the published BERTopic defaults at ``N >= 30``. Unlike the other four
-  methods, the cluster count here is *not* pinned to ``--k`` — HDBSCAN
-  decides how many topics exist and may also emit a ``-1`` "outlier"
-  bucket for documents that fit no cluster, which is recorded as a
-  synthetic last cluster labelled ``"outliers (HDBSCAN)"``. This is the
-  "what does BERTopic do if you let it run with its own defaults?"
-  reference point, in contrast to the apples-to-apples ``bertopic`` mode
-  above. Expect uninformative single-cluster output on the toy fixture;
-  this method only becomes meaningful at the WP3.4 pilot corpus size.
-* ``invisible_ink`` — InvisibleInk (Vinod et al., arXiv:2507.02974)
-  Algorithm 1 via
-  :func:`~agent_memories.agent.invisible_ink.generate`, with the same
-  production :func:`~agent_memories.agent.privacy.prompts.wrap_label`
-  template and :func:`~agent_memories.generalisation.parse_json_labels`
-  parser as the two Amin variants. Isolates the mechanism switch from
-  Amin: same prompt, same Gemma 2 IT model, same ``k``, same cosine
-  assignment; different clipping (DClip vs Amin clip-recenter),
-  different support (Top-k+ vs full vocabulary), different accounting
-  (every token paid a priori via Theorem 2, no SVT). Privacy-critical
-  arithmetic is the authors' ``invink.utils``; the generation loop is
-  ours on the project's KV-cache plumbing.
+* amin_nodp - privacy-free Amin with wrap_label / parse_json_labels.
+  Clip-mean-softmax-multinomial, no noise. Always microbatched
+  (no production twin in privatisation).
+* amin_dp - production generate (KV-cache prefill_padded +
+  continue_batched). Falls back to _generate_dp_microbatched on
+  OOM so peak memory is O(gemma_chunk_size * seq_len) instead of
+  O(N * seq_len).
+* kmeans / bertopic / bertopic_pure - same split as the simple
+  script. bertopic_pure still ignores --k.
+* invisible_ink - InvisibleInk Algorithm 1 via
+  agent_memories.agent.invisible_ink.generate, same prompt/model/k
+  as the Amin variants. Different clip (DClip), different support
+  (Top-k+), every token paid a priori. Same OOM fallback.
 
-TopicDP (Wang et al. KDD 2022, a model-agnostic DP wrapper that injects
-Gaussian noise calibrated via smooth-sensitivity sampling into a non-private
-topic miner's output matrix) is intentionally out of scope here. This
-harness compares cluster *structure* on a small fixture under matched k.
-The matched-privacy comparison between Amin and TopicDP at varying epsilon
-belongs to the WP4.5 privacy-utility sweep, on a larger corpus where
-smooth-sensitivity sampling is meaningful and the comparison metric is
-downstream retrieval / task success rather than cluster structure.
+S should be retuned if N changes; R_MAX and MAX_TOTAL_TOKENS
+should not. Overwrites cluster_comparison_extensive.jsonl.
 
-The fixture is :data:`EXAMPLES_PATH` (10 short event-review strings,
-shared with the rest of ``scripts/amin_et_al/``) repeated 10 times so
-``N = S = 100``. The only constant that *should* be retuned manually
-when N grows is the Amin DP batch-size :data:`S`. The ``R_MAX`` cap on
-private-token budget is independent of N. The privacy-free Amin loop's
-:data:`MAX_TOTAL_TOKENS` is a hard cap on the total decoded length and
-is also independent of N. See the inline comments on each constant for
-the retune rationale.
-
-``amin_dp`` calls production :func:`~agent_memories.agent.privacy.generate`
-(the KV-cache ``prefill_padded`` + ``continue_batched`` path used by
-:mod:`scripts.amin_et_al.WP2_8`). If that forward pass OOMs on long
-inputs, it falls back to :func:`_generate_dp_microbatched`, which runs
-forwards in chunks of ``--gemma-chunk-size`` (default
-:data:`GEMMA_CHUNK_SIZE_DEFAULT`) without KV-cache reuse so peak memory
-drops from ``O(N * seq_len)`` to ``O(gemma_chunk_size * seq_len)``.
-``amin_nodp`` always uses the microbatched helper because it has no
-production twin in ``privatisation``. ``invisible_ink`` calls production
-:func:`~agent_memories.agent.invisible_ink.generate` the same way, and
-on the same OOM falls back to
-:func:`~agent_memories.agent.invisible_ink.generate_microbatched`
-(chunked via the same ``--gemma-chunk-size``).
-
-The script writes one JSONL record per method to
-:data:`OUTPUTS_PATH` in overwrite mode (so the file always reflects the
-most recent run end-to-end), and prints a per-method block to stdout with
-the labels and the input texts grouped under their assigned cluster.
-
-Stand-alone sense-check harness only: imports functions from ``src/`` but
-does not modify them, and is not part of the production WP2 pipeline.
+Stand-alone. Not the production pipeline.
 """
 
 from __future__ import annotations
@@ -150,12 +74,9 @@ from agent_memories.agent.privacy.prompts import wrap_label
 from agent_memories.generalisation import parse_json_labels
 from agent_memories.memory import Embedder
 
-# Amin DP / privacy-free hyperparameters. Values mirror
-# scripts/amin_et_al/WP2_8.py so the DP path runs at the same privacy
-# operating point as the existing round-1 harness. S matches the 10-row
-# toy fixture repeated 10 times (N = 100); the Amin privacy proof bounds
-# depend on the expected batch size. R_MAX is independent of N and rarely
-# needs retuning.
+# Amin knobs copied from scripts/amin_et_al/WP2_8.py. S = 100 because
+# the 10-row fixture is repeated 10 times; Amin's proof uses expected
+# batch size. R_MAX is a token budget, not a function of N.
 S = 100
 C = 20.0
 TAU = 1.0
@@ -165,19 +86,18 @@ THETA = 0.0
 R_MAX = 80
 EPSILON_DEFAULT = 200.0
 
-# Hard cap on the privacy-free Amin loop's decoded length, independent of N.
-# Matches scripts/amin_et_al/simplified_amin.py for like-for-like behaviour.
+# Decoded-length cap for the no-DP loop. Independent of N.
 MAX_TOTAL_TOKENS = 80
 
 K_DEFAULT = 4
 SEED_DEFAULT = 0
-# Max sensitive prompts per Gemma forward pass. The Amin average is identical
-# whether logits are computed in one batch or accumulated over chunks; chunking
-# only caps peak GPU memory (batch=100 can exceed 30 GiB).
+# Max sensitive prompts per Gemma forward. Averaging is the same
+# whether logits come from one batch or from chunks; chunking only
+# caps peak GPU memory (batch=100 can blow past 30 GiB).
 GEMMA_CHUNK_SIZE_DEFAULT = 8
-# InvisibleInk defaults. EPSILON_II_DEFAULT is the authors' recommended
-# operating point (invink README); Amin needs EPSILON_DEFAULT=200 to stay
-# coherent, so matched-budget comparisons should pass --ii-epsilon 200.
+# InvisibleInk defaults. 10 is the authors' recommended operating
+# point; Amin needs EPSILON_DEFAULT=200 to stay coherent, so a
+# matched-budget run should pass --ii-epsilon 200.
 EPSILON_II_DEFAULT = 10.0
 TOP_K_II_DEFAULT = 100
 TAU_II_DEFAULT = 1.0
@@ -200,13 +120,10 @@ MODEL_NAME = "google/gemma-2-2b-it"
 
 @dataclass(frozen=True)
 class ClusteringResult:
-    """One row in the side-by-side comparison.
+    """One method's labels, assignments, and leftover metadata.
 
-    ``labels[i]`` is the label string for cluster ``i`` and
-    ``assignments[j]`` is the cluster index (in ``[0, k)``) that the
-    ``j``-th input text was assigned to. ``extra`` captures method-specific
-    metadata: privacy account for the Amin DP variant, inertia for k-means,
-    topic-info for BERTopic, raw decoded text for both Amin variants.
+    Same shape as the simple comparison script. ``extra`` also holds
+    the InvisibleInk account when that method ran.
     """
 
     method: str
@@ -219,13 +136,9 @@ def _assign_by_cosine(
     text_embeddings: np.ndarray,
     label_embeddings: np.ndarray,
 ) -> list[int]:
-    """Argmax cosine similarity per text against the label embeddings.
+    """Nearest label per text by cosine.
 
-    L2-normalises both tensors and returns the per-text argmax over the
-    ``(N_texts, N_labels)`` cosine-similarity matrix. Used by the two
-    Amin variants to mirror the production round-2 batch-assignment
-    step in :func:`agent_memories.generalisation.assign_memories_to_labels`
-    without needing :class:`MemoryEntry` objects.
+    Same geometry as assign_memories_to_labels, without MemoryEntry.
     """
     text_norms = np.linalg.norm(text_embeddings, axis=1)
     text_norms = np.where(text_norms == 0, 1e-12, text_norms)
@@ -240,7 +153,7 @@ def _assign_by_cosine(
 
 
 def _truncate_words(text: str, n: int) -> str:
-    """First ``n`` whitespace-delimited tokens of ``text``, re-joined."""
+    """First ``n`` whitespace tokens, joined back."""
     return " ".join(text.split()[:n])
 
 
@@ -254,13 +167,11 @@ def _stack_next_token_logits_microbatched(
     *,
     chunk_size: int,
 ) -> torch.Tensor:
-    """Stacked next-token logits for every sensitive prompt, bounded memory.
+    """Stacked next-token logits, at most ``chunk_size`` forwards at once.
 
-    Runs at most ``chunk_size`` Gemma forwards per call instead of one forward
-    over the full batch. The returned tensor has shape
-    ``(len(prompt_ids), vocab_size)`` and is bit-for-bit equivalent to a
-    single :func:`tg.get_next_token_logits_from_ids` call over all rows —
-    only peak activation memory changes.
+    Shape ``(len(prompt_ids), vocab_size)``. Same numbers as a single
+    tg.get_next_token_logits_from_ids over all rows; only peak
+    activation memory changes.
     """
     if chunk_size < 1:
         raise ValueError(f"chunk_size must be >= 1, got {chunk_size}.")
@@ -288,17 +199,10 @@ def _generate_privacy_free_labels(
     max_total_tokens: int = MAX_TOTAL_TOKENS,
     gemma_chunk_size: int = GEMMA_CHUNK_SIZE_DEFAULT,
 ) -> str:
-    """Run the simplified_amin clip+mean+softmax+multinomial loop with wrap_label.
+    """No-noise Amin loop, wrap_label, microbatched forwards.
 
-    Equivalent to :func:`scripts.amin_et_al.simplified_amin.generate` but
-    swaps the round-2 :func:`~agent_memories.agent.privacy.prompts.wrap`
-    template for the round-1
-    :func:`~agent_memories.agent.privacy.prompts.wrap_label` template, so
-    the decoded output is a JSON array of labels rather than a content
-    paragraph. No Laplace noise, no SVT, no ``r`` budget; this is the
-    structural baseline that isolates "labels from an LLM averaging
-    inputs" from any DP-noise effect. Returns the raw decoded string for
-    downstream :func:`parse_json_labels` parsing.
+    JSON array of labels rather than a content paragraph. No Laplace,
+    no SVT, no r. Returns the raw decoded string for parse_json_labels.
     """
     prompts = [wrap_label(items=block, k=k) for block in items_blocks]
     prompt_ids = [tg.encode_chat(p) for p in prompts]
@@ -336,13 +240,10 @@ def _generate_dp_microbatched(
 ) -> tuple[str, PrivacyAccount]:
     """Amin Algorithm 1 with micro-batched sensitive forwards.
 
-    Algorithmically identical to
-    :func:`agent_memories.agent.privacy.privatisation.generate`, but never
-    stacks all sensitive prompts into one ``prefill_padded`` batch. Each
-    token step gathers ``Z`` via :func:`_stack_next_token_logits_microbatched`
-    and runs the public branch as a single-row forward. Re-tokenises the
-    running suffix each step (no KV-cache reuse) so memory stays
-    ``O(gemma_chunk_size * seq_len)`` rather than ``O(N * seq_len)``.
+    Same algorithm as agent_memories.agent.privacy.privatisation.generate,
+    but never stacks all sensitive prompts into one prefill_padded
+    batch. Re-tokenises the running suffix each step (no KV-cache),
+    so memory stays O(gemma_chunk_size * seq_len).
     """
     prompts = [wrap_label(items=text, k=k) for text in texts]
     public_prompt = wrap_label(k=k)
@@ -389,7 +290,7 @@ def _generate_dp_microbatched(
 
 
 def _is_oom_error(exc: RuntimeError) -> bool:
-    """True when ``exc`` looks like a GPU / MPS memory exhaustion."""
+    """True when ``exc`` looks like GPU / MPS memory exhaustion."""
     msg = str(exc).lower()
     return any(needle in msg for needle in ("out of memory", "buffer size", "oom", "mps backend"))
 
@@ -402,10 +303,10 @@ def _generate_dp(
     delta: float,
     gemma_chunk_size: int,
 ) -> tuple[str, PrivacyAccount, str]:
-    """DP Amin via production KV-cache path, microbatched fallback on OOM.
+    """DP Amin via the KV-cache path, microbatched fallback on OOM.
 
-    Returns ``(decoded_output, privacy_account, engine)`` where ``engine``
-    is ``"production"`` or ``"microbatched"`` for the JSONL ``extra`` field.
+    Returns ``(decoded, account, engine)`` where engine is
+    ``"production"`` or ``"microbatched"`` for the JSONL extra field.
     """
     gen_kwargs = {
         "s": S,
@@ -459,10 +360,9 @@ def _generate_ii(
     delta: float,
     gemma_chunk_size: int,
 ) -> tuple[str, InvisibleInkAccount, str]:
-    """InvisibleInk via production KV-cache path, microbatched fallback on OOM.
+    """InvisibleInk via the KV-cache path, microbatched fallback on OOM.
 
-    Returns ``(decoded_output, account, engine)`` where ``engine`` is
-    ``"production"`` or ``"microbatched"`` for the JSONL ``extra`` field.
+    Returns ``(decoded, account, engine)`` for the JSONL extra field.
     """
     gen_kwargs: dict[str, Any] = {
         "b": b,
@@ -500,13 +400,7 @@ def run_amin_privacy_free(
     embedder: Embedder,
     gemma_chunk_size: int,
 ) -> ClusteringResult:
-    """Variant 1: privacy-free Amin, parsed via the production JSON parser.
-
-    Loads Gemma 2 IT, runs the no-noise label-generation loop, parses the
-    result with :func:`parse_json_labels` (same parser the production
-    round-1 path uses), embeds the parsed labels with ``embedder``, and
-    cosine-assigns every input text to its nearest label.
-    """
+    """Privacy-free Amin, then cosine-assign texts to the parsed labels."""
     tg.set_model(MODEL_NAME)
     raw_output = _generate_privacy_free_labels(texts, k=k, gemma_chunk_size=gemma_chunk_size)
 
@@ -544,15 +438,11 @@ def run_amin_dp(
     r_override: int | None,
     gemma_chunk_size: int,
 ) -> ClusteringResult:
-    """Variant 2: production DP Amin round 1, parsed via the production JSON parser.
+    """Production DP Amin round 1, then cosine-assign.
 
-    Mirrors the call shape in :mod:`scripts.amin_et_al.WP2_8`. Exactly one
-    of ``epsilon`` and ``r_override`` must be set; ``epsilon`` is the
-    target privacy budget passed to :func:`solve_r`, ``r_override`` pins
-    the private-token budget directly. The realised ``(epsilon, delta)``
-    are reported via :func:`epsilon_from_rho` / :func:`check_delta` and
-    captured in the ``extra`` field of the returned result so the JSONL
-    record carries the full privacy account.
+    Same call shape as scripts/amin_et_al/WP2_8.py. Pass either
+    ``epsilon`` (solve_r picks r) or ``r_override``. Account goes in
+    ``extra``.
     """
     tg.set_model(MODEL_NAME)
 
@@ -671,13 +561,12 @@ def run_invisible_ink(
     delta: float,
     gemma_chunk_size: int,
 ) -> ClusteringResult:
-    """Variant 6: InvisibleInk Algorithm 1, parsed via the production JSON parser.
+    """InvisibleInk Algorithm 1, then cosine-assign.
 
-    Same prompt / model / k / cosine-assignment surface as
-    :func:`run_amin_dp`; the mechanism underneath is Vinod et al. 2025
-    (DClip + Top-k+, every token paid via Theorem 2). ``b`` is the paper
-    private-reference count and defaults to ``len(texts)`` so the whole
-    fixture contributes, matching ``amin_dp``'s ``S``.
+    Same prompt / model / k / assignment surface as run_amin_dp; the
+    mechanism is Vinod et al. 2025 (DClip + Top-k+, every token paid
+    via Theorem 2). ``b`` defaults to len(texts) so the whole fixture
+    contributes, matching amin_dp's S.
     """
     tg.set_model(MODEL_NAME)
     print(
@@ -746,15 +635,10 @@ def run_kmeans(
     embedder: Embedder,
     seed: int,
 ) -> ClusteringResult:
-    """Variant 3: spherical k-means on L2-normalised sentence embeddings.
+    """Spherical k-means on L2-normalised MiniLM embeddings.
 
-    Embeds the input texts via the project's standard
-    ``all-MiniLM-L6-v2`` :class:`Embedder`, L2-normalises so Euclidean
-    distance approximates cosine, fits :class:`sklearn.cluster.KMeans`
-    with ``random_state=seed`` for reproducibility. The label for each
-    cluster is the input text nearest the cluster's centroid (cosine
-    nearest, since both are L2-normalised), truncated to the first four
-    whitespace-delimited tokens for visual parity with the Amin labels.
+    Cluster label is the nearest input text to the centroid, cut to
+    four words.
     """
     text_embeddings = np.asarray(embedder.embed_batch(texts), dtype=np.float32)
     norms = np.linalg.norm(text_embeddings, axis=1)
@@ -796,18 +680,11 @@ def run_bertopic(
     embedder: Embedder,
     seed: int,
 ) -> ClusteringResult:
-    """Variant 4: BERTopic with KMeans inside and UMAP disabled.
+    """BERTopic with KMeans inside and UMAP off.
 
-    Swaps BERTopic's default HDBSCAN clusterer for
-    :class:`sklearn.cluster.KMeans` and its default UMAP reducer for
-    :class:`bertopic.dimensionality.BaseDimensionalityReduction` (an
-    identity reducer). The clustering itself then matches
-    :func:`run_kmeans` exactly when run on the same pre-computed
-    embeddings; the only difference vs ``kmeans`` is that BERTopic
-    labels each cluster via c-TF-IDF (top-four discriminative terms in
-    the cluster's documents) rather than the nearest-text-to-centroid
-    heuristic. Disabling UMAP avoids the small-N pathology where the
-    default UMAP ``n_neighbors=15`` cannot run on a 10-row fixture.
+    Partition matches run_kmeans on the same embeddings; labels come
+    from c-TF-IDF (top four terms). UMAP is off so a 10-row fixture
+    still fits.
     """
     text_embeddings = np.asarray(embedder.embed_batch(texts), dtype=np.float32)
 
@@ -859,32 +736,12 @@ def run_bertopic_pure(
     embedder: Embedder,
     seed: int,
 ) -> ClusteringResult:
-    """Variant 5: BERTopic with its default UMAP + HDBSCAN backends.
+    """BERTopic with its own UMAP + HDBSCAN; ``--k`` is ignored.
 
-    Mirrors a hands-off ``BERTopic()`` call, with the minimum parameter
-    overrides needed for the pipeline to run at small N: ``UMAP`` falls
-    back to ``n_neighbors=N - 1`` and ``n_components=min(5, N - 1)`` when
-    ``N < 16``; ``HDBSCAN`` falls back to ``min_cluster_size=max(2, N //
-    3)`` when ``N < 30``. At ``N >= 30`` both stages run at BERTopic's
-    published defaults (``UMAP(n_neighbors=15, n_components=5,
-    min_dist=0.0, metric='cosine')`` and ``HDBSCAN(min_cluster_size=10,
-    metric='euclidean')``).
-
-    Unlike the other four methods, the cluster count is auto-discovered
-    by HDBSCAN rather than pinned to a caller-supplied ``k``. Documents
-    that HDBSCAN flags as outliers (topic id ``-1``) are bucketed as a
-    synthetic last cluster labelled ``"outliers (HDBSCAN)"`` so the
-    print and JSONL paths can iterate over a fixed cluster list without
-    a special case. The result's ``labels`` length is the discovered
-    cluster count and may differ from the ``--k`` the user passed; the
-    JSONL record reports both ``k`` (actual) and ``k_requested`` (the
-    flag value) so a downstream reader can spot the mismatch.
-
-    Expect a single-cluster collapse or an all-outlier result on the
-    10-row toy fixture: BERTopic's defaults are tuned for hundreds of
-    documents, and this method exists to register that fact. The
-    meaningful comparison against the other four methods happens once
-    the input scales to the WP3.4 pilot corpus size.
+    Small-N fallbacks so it still runs on the toy fixture. Cluster
+    count is whatever HDBSCAN finds. Outliers (topic -1) become a
+    last bucket labelled "outliers (HDBSCAN)". On N=10 this usually
+    collapses; that is expected.
     """
     text_embeddings = np.asarray(embedder.embed_batch(texts), dtype=np.float32)
     n = len(texts)
@@ -916,10 +773,8 @@ def run_bertopic_pure(
     raw_topics, _ = topic_model.fit_transform(texts, embeddings=text_embeddings)
     raw_topics_int = [int(t) for t in raw_topics]
 
-    # HDBSCAN may emit -1 (outlier) plus a set of dense topic ids. Re-map
-    # those ids to a contiguous 0..K_actual-1 range, with -1 (if present)
-    # pinned to the last slot so the "outlier" bucket is always at the
-    # tail of the cluster list rather than buried among real topics.
+    # HDBSCAN may emit -1 (outlier) plus dense topic ids. Remap to
+    # 0..K_actual-1 with -1 last so the outlier bucket sits at the tail.
     unique_topics = sorted(set(raw_topics_int))
     has_outliers = -1 in unique_topics
     real_topics = [t for t in unique_topics if t != -1]
@@ -974,7 +829,7 @@ def run_bertopic_pure(
 
 
 def _jsonable(value: Any) -> Any:
-    """Coerce numpy / pandas scalars into JSON-serialisable Python primitives."""
+    """numpy / pandas scalars -> JSON-safe Python types."""
     if isinstance(value, (np.integer,)):
         return int(value)
     if isinstance(value, (np.floating,)):
@@ -985,7 +840,7 @@ def _jsonable(value: Any) -> Any:
 
 
 def _members_per_cluster(assignments: list[int], k: int) -> list[list[int]]:
-    """Bucket input indices by their cluster assignment, preserving input order."""
+    """Input indices grouped by cluster, input order kept."""
     buckets: list[list[int]] = [[] for _ in range(k)]
     for idx, cluster_idx in enumerate(assignments):
         if 0 <= cluster_idx < k:
@@ -997,7 +852,7 @@ _FALLBACK_PREFIX = "label_"
 
 
 def _is_fallback_label(label: str) -> bool:
-    """Recognise the ``label_<i>`` literal emitted by parse_json_labels fallbacks."""
+    """True if this is the ``label_<i>`` fallback from parse_json_labels."""
     if not label.startswith(_FALLBACK_PREFIX):
         return False
     suffix = label[len(_FALLBACK_PREFIX) :]
@@ -1005,7 +860,7 @@ def _is_fallback_label(label: str) -> bool:
 
 
 def print_clusters(result: ClusteringResult, texts: list[str]) -> None:
-    """Pretty-print one method's clusters: label per cluster, then member texts."""
+    """Print one method: label per cluster, then the member texts."""
     print()
     print("=" * 72)
     print(f"Method: {result.method}  (k={len(result.labels)})")
@@ -1033,14 +888,10 @@ def _result_to_record(
     n_texts: int,
     created_at: str,
 ) -> dict[str, Any]:
-    """Serialise one :class:`ClusteringResult` into the JSONL record shape.
+    """One ClusteringResult as a JSONL record.
 
-    ``k_requested`` is the ``--k`` the user passed; ``k`` in the
-    returned record is the *actual* cluster count (``len(result.labels)``),
-    which for every method except ``bertopic_pure`` equals
-    ``k_requested`` by construction. The mismatch flag
-    ``k_matches_requested`` makes the downstream JSONL reader's job
-    explicit.
+    ``k`` is the actual cluster count; ``k_requested`` is the flag.
+    They differ only for bertopic_pure.
     """
     k_actual = len(result.labels)
     buckets = _members_per_cluster(result.assignments, k_actual)
@@ -1265,7 +1116,7 @@ def main() -> None:
         )
 
     for result in results:
-        # invisible_ink may run on a prefix of texts when --ii-batch-size < N.
+        # invisible_ink may run on a prefix when --ii-batch-size < N.
         member_texts = ii_texts if result.method == "invisible_ink" else texts
         print_clusters(result, member_texts)
 

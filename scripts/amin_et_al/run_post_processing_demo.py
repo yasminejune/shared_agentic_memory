@@ -1,19 +1,8 @@
-"""Smoke-runs the WP2-plan §3.5 post-processing arm against local Ollama.
+"""One-shot title and description from a content/label pair via local Ollama.
 
-Given a (``--content``, ``--label``) pair on the command line --
-representing the DP-released ``content`` of a shared :class:`MemoryItem`
-and its round-1 label -- the script calls
-:func:`agent_memories.generalisation.title_and_description` through the
-project-default Qwen Ollama wrapper, prints the resulting ``(title,
-description)``, and appends one JSONL record to
-``scripts/amin_et_al/outputs/intermediate_memories.jsonl`` via
-:func:`agent_memories.generalisation.save_intermediate`.
-
-Prerequisites: ``ollama serve`` running on http://localhost:11434 and
-``ollama pull qwen3.5:4b-nvfp4``. The full WP2 pipeline lives in
-``src/agent_memories/generalisation/`` and a future
-``scripts/memories/WP2_pipeline.py`` driver; this demo is the
-single-call usage example for the §3.5 arm in isolation.
+Needs ollama serve on localhost:11434 with qwen3.5:4b-nvfp4 pulled.
+Appends one JSONL record under scripts/amin_et_al/outputs/.
+Not the production pipeline (src/agent_memories/generalisation).
 """
 
 from __future__ import annotations

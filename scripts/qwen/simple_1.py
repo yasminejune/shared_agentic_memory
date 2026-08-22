@@ -1,15 +1,12 @@
-"""Smallest possible sanity check that ``qwen3.5:4b-nvfp4`` is reachable via Ollama.
+"""Can we reach qwen3.5:4b-nvfp4 through OllamaClient?
 
-Uses the project's own :class:`OllamaClient` (the same client the WP1.3
-agent goes through) so a clean run here proves the full path -- Ollama
-up, model pulled, MLX runner subprocess engaged, native ``/api/chat``
-honouring ``think: false`` -- that the agent depends on. Hardcoded
-prompt, no CLI flags, no browser: one chat call and a print.
+Same client the WP1.3 Think node uses, so a clean run here means
+Ollama is up, the model is pulled, the MLX runner is alive, and
+/api/chat honours think: false. One hardcoded prompt, no flags,
+no browser.
 
-Prerequisites:
-
-* ``ollama serve`` running on http://localhost:11434
-* ``ollama pull qwen3.5:4b-nvfp4``
+Needs ``ollama serve`` on localhost:11434 and
+``ollama pull qwen3.5:4b-nvfp4``.
 """
 
 from __future__ import annotations

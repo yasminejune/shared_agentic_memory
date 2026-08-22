@@ -1,7 +1,4 @@
-"""Unit tests for the WP1.3 action grammar parser.
-
-Pure string-in/dict-out checks: no Playwright, no LLM, no network.
-"""
+"""Tests for the action grammar parser."""
 
 from __future__ import annotations
 

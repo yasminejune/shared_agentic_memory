@@ -1,4 +1,4 @@
-"""Action validation for BrowserGym WebArena high-level action strings."""
+"""Parse one BrowserGym action line out of a Qwen reply."""
 
 from __future__ import annotations
 
@@ -9,24 +9,21 @@ from .env import WEBARENA_ACTION_SET
 
 
 class ActionParseError(ValueError):
-    """Raised when an LLM response does not match the BrowserGym action grammar."""
+    """Reply is not a single allowed BrowserGym call."""
 
 
 _ALLOWED_FUNCTIONS = frozenset(WEBARENA_ACTION_SET.action_set.keys())
 
-# Native thinking usually arrives in message.thinking, but some model /
-# Ollama combinations leak a <think> block into content. Drop both the
-# closed and the unterminated form (budget ran out mid-trace).
+# Some Ollama/Qwen runs leak <think> into content. Strip closed and
+# unterminated blocks (budget ran out mid-trace).
 _THINK_BLOCK_RE = re.compile(r"<think>.*?(?:</think>|$)", re.DOTALL | re.IGNORECASE)
 
 
 def extract_action_line(reply: str) -> str:
-    """Pull a single BrowserGym action line out of a talkative reply.
+    """Take one allowed action line from a Qwen reply.
 
-    Order: drop a leaked ``<think>`` block, strip Markdown fence marker
-    lines, then return the last remaining line that validates as an
-    allowed call. If none validate, return the stripped text so
-    :func:`parse_action` raises with the same shape of error as today.
+    Drops a leaked <think> block and markdown fence lines, then takes the last
+    line that parses. If none do, return the leftover text for parse_action.
     """
     if reply is None:
         return ""
@@ -42,7 +39,6 @@ def extract_action_line(reply: str) -> str:
 
 
 def _strip_markdown_fence_lines(text: str) -> str:
-    """Drop lines that are only a Markdown fence opener or closer."""
     kept: list[str] = []
     for line in text.splitlines():
         if line.strip().startswith("```"):
@@ -52,10 +48,10 @@ def _strip_markdown_fence_lines(text: str) -> str:
 
 
 def parse_action(line: str) -> str:
-    """Validate a single BrowserGym WebArena action string.
+    """Accept one allowed function call, else raise ActionParseError.
 
-    Returns the stripped action unchanged for ``env.step()``.
-    Termination uses ``send_msg_to_user('...')`` or ``report_infeasible('...')`` only.
+    Termination is send_msg_to_user or report_infeasible. The string is
+    passed to env.step unchanged.
     """
     if line is None:
         raise ActionParseError("Action line was None")

@@ -1,4 +1,4 @@
-"""Public-to-local URL resolution for sandboxed WebArena navigation."""
+"""Rewrite public WebArena hosts onto the local instance."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import os
 from functools import lru_cache
 from urllib.parse import urlparse, urlunparse
 
-# Canonical WebArena public hosts plus aliases observed in the no-memory baseline.
+# Public WebArena hosts plus aliases from the no-memory baseline.
 SITE_HOSTS: dict[str, str] = {
     "reddit.com": "reddit",
     "onestopmarket.com": "shopping",
@@ -38,7 +38,7 @@ _SITE_ENV_KEYS: dict[str, str] = {
 def _normalise_host(netloc: str) -> str:
     host = netloc.lower().split("@")[-1]
     if host.startswith("[") and "]" in host:
-        # IPv6 literal — keep as-is up to the closing bracket / port.
+        # IPv6 literal: keep as-is up to the closing bracket / port.
         return host
     host = host.split(":")[0]
     if host.startswith("www."):
@@ -60,9 +60,8 @@ def _is_on_instance(netloc: str, site_urls: dict[str, str], home_url: str) -> bo
 def resolve_local_url(url: str, site_urls: dict[str, str], home_url: str) -> str:
     """Map a navigation target onto the local WebArena instance.
 
-    Already-on-instance URLs pass through. Hosts in :data:`SITE_HOSTS` are
-    rewritten onto the matching site origin while preserving path and query.
-    Anything else falls back to ``home_url``.
+    URLs already on the instance pass through. Hosts in SITE_HOSTS keep path
+    and query on the matching site origin. Anything else becomes home_url.
     """
     parsed = urlparse(url)
     if not parsed.netloc:
@@ -92,7 +91,7 @@ def resolve_local_url(url: str, site_urls: dict[str, str], home_url: str) -> str
 
 @lru_cache(maxsize=1)
 def instance_urls() -> tuple[dict[str, str], str]:
-    """Return ``(site_urls, home_url)`` from the ``WA_*`` environment variables."""
+    """Return (site_urls, home_url) from the WA_* environment variables."""
     missing = [env for env in _SITE_ENV_KEYS.values() if not os.environ.get(env)]
     if not os.environ.get("WA_HOMEPAGE"):
         missing.append("WA_HOMEPAGE")

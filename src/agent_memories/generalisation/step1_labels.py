@@ -1,7 +1,7 @@
-"""Step 1: InvisibleInk label synthesis from task descriptions.
+"""Step 1: differentially private labels from task descriptions.
 
-One private prompt row per extracted task (``MemoryEntry.query``), not
-the distilled memory items. Writes ``labels.json`` under ``--work-dir``.
+InvisibleInk generates labels from task queries, not from memory items.
+Writes labels.json under --work-dir.
 """
 
 from __future__ import annotations
@@ -48,7 +48,7 @@ def run_label_generation(
     chunk_size: int = GEMMA_CHUNK_SIZE,
     generate_fn: GenerateFn = generate_with_oom_fallback,
 ) -> dict[str, Any]:
-    """Synthesise ``k`` labels from task queries; return the labels artefact."""
+    """Synthesise k labels from task queries; return the labels artefact."""
     if not entries:
         raise ValueError("Step 1 requires at least one extracted task.")
     texts = [entry.query for entry in entries]

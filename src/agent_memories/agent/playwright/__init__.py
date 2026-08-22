@@ -1,1 +1,1 @@
-"""Playwright-direct Observe-Think-Act agent (WP1)."""
+"""Observe-Think-Act agent on a Playwright page."""

@@ -1,34 +1,20 @@
-"""Side-by-side comparison of Gemma 2 IT vs Gemma 2 base on the WP2.3 prompt.
+"""Gemma 2 instruct vs base on the same Amin averaging loop.
 
-Runs the same privacy-free Amin Algorithm 1 averaging loop twice on
-the 10 toy rows of ``scripts/amin_et_al/examples.csv``: once under
-``google/gemma-2-2b-it`` with the chat-template prompt
-(``tg.encode_chat``), once under ``google/gemma-2-2b`` with the
-raw-completion prompt (``tg.encode``). For each regime the script
-prints the raw decoded text alongside the input memory items so the
-fittingness of the synthesised lesson against the 10 source reviews
-can be assessed by hand. The judgement is intentionally subjective:
-no parser verdict, no schema check.
+Runs the privacy-free clip-mean-softmax-multinomial loop twice on
+the 10 toy rows in scripts/amin_et_al/examples.csv: once with
+google/gemma-2-2b-it and the chat template (encode_chat), once with
+google/gemma-2-2b and raw completion (encode). Prints the decoded
+text next to the source reviews. No parser, no schema check; I read
+both outputs.
 
-This is the §3.5-aware harness: under the 2026-06-02 plan revision
-(WP2-plan §3.3 + §11 deviation 9), the privacy-spending DP path
-emits a single content paragraph anchored on ``Lesson:`` with no
-markdown scaffolding, and the matching ``title`` and ``description``
-are added downstream by the §3.5 Qwen post-processing call on the
-DP-released content. That post-processing step is intentionally out
-of scope here so the comparison isolates Gemma-regime effects on the
-DP-spending step itself.
+The DP path in the thesis emits a single Lesson: paragraph with no
+markdown. Title and description are added later by Qwen. That
+post-processing is out of scope here on purpose, so the comparison
+is only "does instruct vs base change the spending-step text?"
 
-Fair-comparison invariants:
-
-* same wrapped prompts (built via :func:`wrap` with the same
-  :data:`LABEL` and the raw input texts as the items block),
-* same clip bound :data:`C` and same token cap :data:`MAX_TOTAL_TOKENS`,
-* same multinomial sampler.
-
-The only confound that varies is (model x prompt regime), which is
-exactly what the comparison is meant to isolate.
-
+Held fixed: wrap() prompts, clip bound C, token cap MAX_TOTAL_TOKENS,
+multinomial sampler. The only thing that moves is (model x prompt
+regime).
 """
 
 from __future__ import annotations
@@ -53,12 +39,10 @@ MODEL_BASE = "google/gemma-2-2b"
 def generate(prompt_ids: list[list[int]]) -> str:
     """Privacy-free clip-mean-softmax-multinomial loop.
 
-    Mirrors :func:`scripts.amin_et_al.simplified_amin.generate` but
-    inlined so the comparison script does not depend on a sibling
-    script's exact CLI shape. Each iteration concatenates ``x_ids``
-    onto every prompt's pre-tokenised ids and feeds the result to
-    :func:`tg.get_next_token_logits_from_ids`, paying no per-step
-    re-tokenisation cost.
+    Same loop as scripts/amin_et_al/simplified_amin.py, inlined so
+    this comparison does not depend on that script's CLI. Each step
+    concatenates x_ids onto every prompt's pre-tokenised ids and
+    calls tg.get_next_token_logits_from_ids (no re-tokenisation).
     """
     stop = tg.stop_ids()
     x_ids: list[int] = []
@@ -81,7 +65,7 @@ def run(
     encode_fn: Callable[[str], list[int]],
     texts: list[str],
 ) -> str:
-    """Swap to ``model_name``, encode prompts from ``texts``, run the loop."""
+    """Load ``model_name``, encode ``texts``, run the averaging loop."""
     print(f"\nLoading {model_name}...")
     tg.set_model(model_name)
 
@@ -91,7 +75,7 @@ def run(
 
 
 def report(model_name: str, regime: str, output: str) -> None:
-    """Print the regime header and the raw DP output for subjective review."""
+    """Print the regime header and the raw output for a hand look."""
     print()
     print("=" * 72)
     print(f"Model:  {model_name}")

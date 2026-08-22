@@ -1,4 +1,4 @@
-"""Adapter-contract tests for InvisibleInk privacy accounting."""
+"""Tests for InvisibleInk privacy accounting."""
 
 from __future__ import annotations
 
@@ -22,24 +22,18 @@ EPSILON = 10.0
 
 
 def test_clip_then_epsilon_recovers_target() -> None:
-    """clip_for_budget then epsilon_for_tokens recovers the calibrated epsilon."""
     c = clip_for_budget(EPSILON, DELTA, T, B, TAU)
     realised = epsilon_for_tokens(T, c, B, TAU, DELTA)
     assert realised == pytest.approx(EPSILON, rel=1e-4, abs=1e-4)
 
 
 def test_rho_for_tokens_matches_theorem2_closed_form() -> None:
-    """rho_for_tokens uses paper B: ρ = T · (C / (B τ))² / 2."""
     c = 2.5
     expected = float(T) * 0.5 * (c / (float(B) * TAU)) ** 2
     assert rho_for_tokens(T, c, B, TAU) == pytest.approx(expected, rel=1e-12)
 
 
 def test_epsilon_for_tokens_agrees_with_cdp_eps_of_rho() -> None:
-    """epsilon_for_tokens equals cdp_eps(rho_for_tokens(...), delta).
-
-    Catches a `b` versus `b + 1` slip at the get_epsilon / compute_rho boundary.
-    """
     c = clip_for_budget(EPSILON, DELTA, T, B, TAU)
     rho = rho_for_tokens(T, c, B, TAU)
     via_adapters = epsilon_for_tokens(T, c, B, TAU, DELTA)
@@ -48,13 +42,11 @@ def test_epsilon_for_tokens_agrees_with_cdp_eps_of_rho() -> None:
 
 
 def test_rho_from_epsilon_round_trips() -> None:
-    """rho_from_epsilon then epsilon_from_rho recovers the input epsilon."""
     rho = rho_from_epsilon(EPSILON, DELTA)
     assert epsilon_from_rho(rho, DELTA) == pytest.approx(EPSILON, rel=1e-4, abs=1e-4)
 
 
 def test_clip_for_budget_scales_with_sqrt_b() -> None:
-    """At fixed budget, doubling B roughly doubles C (Theorem 2)."""
     c_small = clip_for_budget(EPSILON, DELTA, T, B, TAU)
     c_large = clip_for_budget(EPSILON, DELTA, T, 2 * B, TAU)
     assert c_large / c_small == pytest.approx(2.0, rel=1e-6)

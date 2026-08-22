@@ -1,63 +1,11 @@
-"""Side-by-side comparison of round-1 label-generation prompts under DP.
+"""Side-by-side Amin label prompts on the toy memories.
 
-Runs the same Amin et al. Algorithm 1 mechanism
-(:func:`agent_memories.agent.privacy.generate`) on the same 10 toy
-memories with the same privacy hyperparameters, swapping only the
-prompt template. Each variant runs ``--runs`` times (default 1) so
-the qualitative reviewer can see both the raw DP output and the
-parsed label list per draw, and judge stability across draws.
+Same Algorithm 1 settings; prompts are frozen local copies so later
+production edits do not change this comparison. Variants: json_array,
+json_one_array, json_discriminative, json_discriminative_one, json_specific.
 
-All three prompt templates live as script-local constants
-(:data:`NUMBERED_PROMPT`, :data:`JSON_PROMPT`,
-:data:`JSON_DISCRIMINATIVE_PROMPT`) rather than being imported from
-:mod:`agent_memories.agent.privacy.prompts`. This is a deliberate
-snapshot: if the production ``LABEL_PROMPT`` is later edited or
-replaced when one of the JSON variants is promoted into production,
-the comparison harness still holds a frozen copy of every prompt it
-has ever tested, so the side-by-side comparison stays reproducible
-against the historical baselines. ``NUMBERED_PROMPT`` is a verbatim
-snapshot of ``LABEL_PROMPT`` as of 2026-06-04.
-
-The three variants registered here are:
-
-* ``numbered_wp2plan_3.2`` — verbatim snapshot of the WP2-plan §3.2
-  numbered-list template (the production
-  :data:`agent_memories.agent.privacy.prompts.LABEL_PROMPT` as of
-  2026-06-04). Parser: numbered ``N. <label>`` lines with
-  ``label_<i>`` fallback.
-* ``json_array`` — an experimental template that asks the model for
-  a JSON array of strings, with a 6-item example. The ``"exactly six"``
-  instruction in the source prompt is templated to ``"exactly {k}"``
-  so every variant runs at the same ``--k``; apples-to-apples
-  comparison. Parser: ``json.loads`` first, then a fallback regex
-  over double-quoted substrings, then ``label_<i>`` padding.
-* ``json_discriminative`` — the ``json_array`` template with one
-  added anti-redundancy clause in the instruction: each label must
-  be on a distinct facet, no synonyms or paraphrases of any other
-  label. Same JSON output format, same example, same parser as
-  ``json_array``; only the instruction prose differs, so any
-  qualitative gap between the two isolates the effect of the
-  discriminativity instruction itself (not an example change and
-  not an output-format change).
-
-Fairness controls: privacy hyperparameters (``s``, ``c``, ``tau``,
-``tau_public``, ``sigma``, ``theta``) are fixed at the same values
-as ``WP2_8.py``; ``r`` is computed once from ``--epsilon`` (via
-:func:`solve_r`) or supplied directly via ``--r`` and then reused
-across every variant and every run. So all variants spend the same
-private-token budget on the same data, and only the prompt template
-varies.
-
-Output file ``scripts/amin_et_al/outputs/label_prompt_comparison.jsonl``
-is overwritten on every invocation (one JSONL record per
-(variant, run)) so the reviewer's eye can move between the printed
-console block and the persisted record.
-
-This script is a comparison harness and does not promote either
-prompt into production. The chosen variant should be added to
-:mod:`agent_memories.agent.privacy.prompts` in the same shape as
-the existing :data:`agent_memories.agent.privacy.prompts.LABEL_PROMPT`
-once the choice is made.
+Writes scripts/amin_et_al/outputs/label_prompt_comparison.jsonl.
+Harness only.
 """
 
 from __future__ import annotations
@@ -84,8 +32,8 @@ S = 100  # batch size (100 examples)
 C = 50.0  # logit clip
 TAU = 1.0  # private temperature
 TAU_PUBLIC = 1.5  # public temperature
-SIGMA = 0.1  # SVT noise scale (matches WP2_8.py rationale)
-THETA = 0.0  # SVT threshold (matches WP2_8.py rationale)
+SIGMA = 0.1  # SVT noise scale (same as WP2_8.py)
+THETA = 0.0  # SVT threshold (same as WP2_8.py)
 R_MAX = 80  # cap passed to solve_r
 EPSILON_DEFAULT = 200.0
 K_DEFAULT = 3  # matches the JSON variant's native example count
@@ -186,67 +134,27 @@ JSON_SPECIFIC_PROMPT = (
 
 
 def wrap_numbered(items: str = "(no examples)", *, k: int) -> str:
-    """Format :data:`NUMBERED_PROMPT` for one batch member or the SVT public prompt.
-
-    Local counterpart of
-    :func:`agent_memories.agent.privacy.prompts.wrap_label` against
-    the frozen :data:`NUMBERED_PROMPT` snapshot. Behaviourally
-    identical to the production ``wrap_label`` as of 2026-06-04; the
-    point of the local copy is to keep this comparison harness
-    independent of future edits to the production template.
-    """
+    """Fill NUMBERED_PROMPT for one batch member or the public prompt."""
     return NUMBERED_PROMPT.format(k=k, items=items)
 
 
 def wrap_json(items: str = "(no examples)", *, k: int) -> str:
-    """Format :data:`JSON_PROMPT` for one batch member or the SVT public prompt.
-
-    Sibling of :func:`wrap_numbered`. The default empty-items body
-    (``"(no examples)"``) yields the SVT public prompt; passing a
-    rendered items block yields the matching private prompt for that
-    batch member. ``k`` substitutes into the ``"Return exactly {k}
-    labels."`` line so the count instruction matches the ``--k`` the
-    user passes.
-    """
+    """Fill JSON_PROMPT for one batch member or the public prompt."""
     return JSON_PROMPT.format(k=k, items=items)
 
 
 def wrap_one_json(items: str = "(no examples)", *, k: int) -> str:
-    """Format :data:`JSON_PROMPT` for one batch member or the SVT public prompt.
-
-    Sibling of :func:`wrap_numbered`. The default empty-items body
-    (``"(no examples)"``) yields the SVT public prompt; passing a
-    rendered items block yields the matching private prompt for that
-    batch member. ``k`` substitutes into the ``"Return exactly {k}
-    labels."`` line so the count instruction matches the ``--k`` the
-    user passes.
-    """
+    """Fill JSON_ONE_PROMPT for one batch member or the public prompt."""
     return JSON_ONE_PROMPT.format(k=k, items=items)
 
 
 def wrap_json_discriminative(items: str = "(no examples)", *, k: int) -> str:
-    """Format :data:`JSON_DISCRIMINATIVE_PROMPT` for one batch member or SVT public.
-
-    Identical shape to :func:`wrap_json` so the comparison harness
-    passes one through the other transparently. The only material
-    difference vs. :data:`JSON_PROMPT` is the added anti-redundancy
-    clause asking for distinct facets; the JSON output format and
-    the worked example are unchanged so any qualitative effect is
-    attributable to the instruction prose alone.
-    """
+    """Fill JSON_DISCRIMINATIVE_PROMPT for one batch member or the public prompt."""
     return JSON_DISCRIMINATIVE_PROMPT.format(k=k, items=items)
 
 
 def wrap_json_discriminative_one(items: str = "(no examples)", *, k: int) -> str:
-    """Format :data:`JSON_DISCRIMINATIVE_PROMPT` for one batch member or SVT public.
-
-    Identical shape to :func:`wrap_json` so the comparison harness
-    passes one through the other transparently. The only material
-    difference vs. :data:`JSON_PROMPT` is the added anti-redundancy
-    clause asking for distinct facets; the JSON output format and
-    the worked example are unchanged so any qualitative effect is
-    attributable to the instruction prose alone.
-    """
+    """Fill JSON_DISCRIMINATIVE_ONE_PROMPT for one batch member or the public prompt."""
     return JSON_DISCRIMINATIVE_ONE_PROMPT.format(k=k, items=items)
 
 
@@ -255,19 +163,12 @@ _QUOTED_STRING = re.compile(r'"([^"\n]+)"')
 
 
 def wrap_json_specific(items: str = "(no examples)", *, k: int) -> str:
-    """Format :data:`JSON_SPECIFIC_PROMPT` for one batch member or SVT public."""
+    """Fill JSON_SPECIFIC_PROMPT for one batch member or the public prompt."""
     return JSON_SPECIFIC_PROMPT.format(k=k, items=items)
 
 
 def parse_numbered(raw: str, k: int) -> list[tuple[str, bool]]:
-    """Numbered-list parser (mirrors ``WP2_8.py``).
-
-    The :data:`~agent_memories.agent.privacy.prompts.LABEL_PROMPT`
-    ends literally on ``Topics:\\n1.``, so the first sampled token
-    is the continuation of label 1. Prepend ``"1."`` back, split on
-    newlines, match ``^\\s*(\\d+)\\.\\s*(.+?)\\s*$`` per line, pad
-    missing indices with ``label_<i>``.
-    """
+    """Parse numbered `N. label` lines; pad missing slots with label_<i>."""
     full_text = "1." + raw
     found: dict[int, str] = {}
     for line in full_text.splitlines():
@@ -282,18 +183,7 @@ def parse_numbered(raw: str, k: int) -> list[tuple[str, bool]]:
 
 
 def parse_json(raw: str, k: int) -> list[tuple[str, bool]]:
-    """JSON-array parser with two fallback layers, then ``label_<i>`` padding.
-
-    Layer 1: strict :func:`json.loads` on the stripped raw output.
-    Layer 2: same with a trailing ``"]"`` appended (the DP output may
-    have been cut off at ``r`` tokens before the closing bracket).
-    Layer 3: regex-extract every double-quoted substring as a label
-    candidate.
-
-    The first layer that returns at least one non-empty string wins;
-    the result is truncated to ``k`` candidates and any missing
-    slots are padded with ``label_<i>``.
-    """
+    """Parse a JSON array, with a closing-bracket repair and a quoted-string fallback."""
     raw_stripped = raw.strip()
     candidates: list[str] = []
     for repair in ("", "]"):
@@ -317,13 +207,7 @@ def parse_json(raw: str, k: int) -> list[tuple[str, bool]]:
 
 @dataclass(frozen=True)
 class PromptVariant:
-    """One row in the comparison: name, wrap function, parser.
-
-    ``wrap_fn`` has the same shape as
-    :func:`agent_memories.agent.privacy.prompts.wrap_label` so the
-    Amin ``generate`` call site is identical across variants; only
-    the template content differs.
-    """
+    """One comparison row: name, wrap function, parser."""
 
     name: str
     wrap_fn: Callable[..., str]

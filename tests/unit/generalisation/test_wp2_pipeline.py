@@ -1,4 +1,4 @@
-"""Unit tests for WP2 checkpoint defaults and entry-level gating."""
+"""Tests for WP2 checkpoint defaults and entry-level gating."""
 
 from __future__ import annotations
 

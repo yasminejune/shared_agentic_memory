@@ -1,47 +1,25 @@
-"""InvisibleInk Algorithm 1 — DP text generation over token logits.
+"""InvisibleInk Algorithm 1 (Vinod et al., arXiv:2507.02974).
 
-Personal implementation of the generation loop from
-`Vinod et al. 2025 <https://arxiv.org/abs/2507.02974>`_ (NeurIPS 2025),
-wired onto this project's Gemma 2 IT token plumbing and the same
-``wrap_fn`` / ``**wrap_kwargs`` calling convention as
-:mod:`agent_memories.agent.privacy.privatisation`.
-
-Privacy-critical arithmetic is delegated to the authors' pip package:
-
-* :func:`~agent_memories.agent.invisible_ink.mechanism.dclip_mean` wraps
-  :func:`invink.utils.difference_clip`
-* :func:`~agent_memories.agent.invisible_ink.mechanism.top_k_plus_mask`
-  wraps :func:`invink.utils.get_topk` (with paper ``B``, not
-  ``invink.generate``'s ``B + 1``)
-* clip / epsilon / rho calibration wraps
-  :func:`invink.utils.get_clip` / :func:`invink.utils.get_epsilon` /
-  :func:`invink.utils.compute_rho` via
-  :mod:`agent_memories.agent.invisible_ink.accounting`
-
-What is ours: the per-token loop on
-:func:`~agent_memories.agent.privacy.token_generation.prefill_padded` +
-:func:`~agent_memories.agent.privacy.token_generation.continue_batched`
-(and the algorithmically identical microbatched fallback
-:func:`generate_microbatched`), the torch multinomial sample, and the
-prompt templates in :mod:`agent_memories.agent.privacy.prompts`. We
-deliberately do **not** call :func:`invink.generate`: it loads its own
-model, owns fixed positional prompt templates, auto-derives
-``max_toks`` from reference length, and emits ``num`` sequences from
-disjoint partitions — none of which fits "one JSON array of ``k``
-labels from one batch of ``B`` references".
+Token-by-token DP generation for Step 1 labels and Step 3 shared-memory
+content. Shares Gemma plumbing and prompt templates with agent/privacy/.
+Does not call ``invink.generate``: that path loads its own model and
+emits ``num`` sequences from disjoint partitions, which does not fit
+one JSON array of ``k`` labels from one batch of ``B`` references.
 
 Per-token steps (paper Algorithm 1):
 
 1. Prefill ``B`` sensitive prompts plus one public prompt.
 2. Build Top-k+ vocabulary from public logits only:
-   ``{y : φ_pub(y) ≥ ℓ − 2C/B}``.
+   ``{y : phi_pub(y) >= ell - 2C/B}``.
 3. DClip-aggregate private logits:
-   ``φ_bar = φ_pub + (1/B) Σ clip_C(φ_i − φ_pub)``.
-4. Sample from ``softmax(φ_bar[V_k+] / τ)``; every token spends budget
-   (no Amin SVT public path).
+   ``phi_bar = phi_pub + (1/B) sum clip_C(phi_i - phi_pub)``.
+4. Sample from ``softmax(phi_bar[V_k+] / tau)``; every token spends
+   budget (no Amin SVT public path).
 
-Clip ``C`` is calibrated from target ``(ε, δ)`` via Theorem 2:
-``C = B τ √(2 ρ / T)`` with ``ρ`` inverted from ``ε`` at fixed ``δ``.
+Clip ``C`` is calibrated from target ``(epsilon, delta)`` via Theorem 2:
+``C = B * tau * sqrt(2 * rho / T)`` with ``rho`` inverted from
+``epsilon`` at fixed ``delta``. The guarantee is example-level (one
+MemoryEntry), not user-level.
 """
 
 from __future__ import annotations
@@ -188,28 +166,24 @@ def generate(
     """Run InvisibleInk Algorithm 1 on one batch; return text + account.
 
     ``texts`` are pre-rendered memory-items blocks, one per batch
-    member; each drops into the ``{items}`` slot of whichever template
-    ``wrap_fn`` formats. ``wrap_fn`` defaults to the round-2
-    :func:`~agent_memories.agent.privacy.prompts.wrap`; the round-1
-    caller passes ``wrap_fn=wrap_label`` together with ``k=...``. The
-    public prompt is built by calling ``wrap_fn(**wrap_kwargs)`` with
-    no ``items`` argument so the items block defaults to
-    ``"(no examples)"``, aligning format tokens between the public and
-    private branches. Under InvisibleInk ``φ_pub`` is subtracted from
-    every private logit and defines the sampling support, so that
-    alignment matters more than it did under Amin's SVT branch.
+    member. ``wrap_fn`` defaults to the round-2 ``wrap``; the round-1
+    caller passes ``wrap_fn=wrap_label`` with ``k=...``. The public
+    prompt is ``wrap_fn(**wrap_kwargs)`` with no ``items``, so the
+    items block defaults to ``"(no examples)"``. ``phi_pub`` is
+    subtracted from every private logit and defines the sampling
+    support, so that alignment matters.
 
     ``b`` is the accounting private-reference count used to calibrate
     clip ``C`` and the Theorem 2 spend. It must satisfy
     ``len(texts) >= b``. When they are equal, this is the paper's
     ``B = |R|``. When ``len(texts) > b``, DClip still averages over
     the actual rows (sensitivity ``1/n``) while clip / epsilon use
-    the smaller ``b`` — an upper-bound account for a qualifying
-    bucket that is larger than the gate threshold.
+    the smaller ``b``: an upper-bound account for a qualifying bucket
+    that is larger than the gate threshold.
 
     Uses a single padded KV-cache prefill over ``B + 1`` rows. On
     long inputs that path can OOM on MPS; callers that need a
-    memory-capped twin should use :func:`generate_microbatched`.
+    memory-capped twin should use ``generate_microbatched``.
     """
     c, stop, prompt_ids, public_ids = _prepare(
         texts,
@@ -272,13 +246,13 @@ def generate_microbatched(
     wrap_fn: Callable[..., str] = wrap,
     **wrap_kwargs: Any,
 ) -> tuple[str, InvisibleInkAccount]:
-    """Algorithmically identical to :func:`generate`, without a full-batch prefill.
+    """Same Algorithm 1 as ``generate``, without a full-batch prefill.
 
     Each token step gathers private logits in chunks of ``chunk_size``
-    via :func:`~agent_memories.agent.privacy.token_generation.get_next_token_logits_from_ids`
-    and runs the public branch as a single-row forward. Re-tokenises
-    the running suffix each step (no KV-cache reuse) so peak memory
-    stays ``O(chunk_size * seq_len)`` rather than ``O(B * seq_len)``.
+    via ``get_next_token_logits_from_ids`` and runs the public branch
+    as a single-row forward. Re-tokenises the running suffix each step
+    (no KV-cache reuse) so peak memory stays ``O(chunk_size * seq_len)``
+    rather than ``O(B * seq_len)``.
     """
     if chunk_size < 1:
         raise ValueError(f"chunk_size must be >= 1, got {chunk_size}.")
@@ -335,12 +309,11 @@ def generate_with_oom_fallback(
     chunk_size: int = 8,
     **kwargs: Any,
 ) -> tuple[str, InvisibleInkAccount, str]:
-    """Run :func:`generate`, falling back to :func:`generate_microbatched` on OOM.
+    """Run ``generate``, falling back to ``generate_microbatched`` on OOM.
 
     Returns ``(decoded_text, account, engine)`` where ``engine`` is
     ``"production"`` or ``"microbatched"``. ``kwargs`` are forwarded to
-    both call sites (``b``, ``tau``, ``top_k``, ``max_total_tokens``,
-    ``target_epsilon``, ``delta``, ``wrap_fn``, wrap kwargs).
+    both call sites.
     """
     print("  invisible_ink: trying production generate (KV-cache path)...", flush=True)
     try:

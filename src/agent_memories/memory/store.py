@@ -1,29 +1,7 @@
-"""Per-user :class:`MemoryStore` and the records it holds.
+"""Per-user JSONL memory store.
 
-Storage is intentionally minimal: one JSONL file per user, one record
-per line, embedding inlined alongside the structured items. Reload is
-therefore O(file size) and never needs to call the embedder again,
-which keeps the controlled-task smoke runs deterministic across
-machines.
-
-Cosine search runs against an in-memory ``numpy`` matrix that the store
-rebuilds whenever an entry is added. WP1.6 operates at a scale of at
-most a handful of memories per user; brute-force cosine is far simpler
-than introducing FAISS or a vector DB, and the proposal explicitly
-punts retrieval optimisation (§3.2.2).
-
-WP1.6 schema (ReasoningBank, Ouyang et al. 2025, Appendix A.2):
-
-* Each disk record is one *trajectory* keyed by its task query.
-* The embedding is computed over the **query string**, not over the
-  memory items themselves, so retrieval is query-to-query similarity.
-* Each record holds 1-3 :class:`MemoryItem`s with the paper's
-  ``{title, description, content}`` schema and an ``outcome`` of either
-  ``"successful"`` or ``"failed"`` (one outcome per trajectory, shared
-  by all items extracted from it).
-
-WP2.4's shared cross-user store is just a second :class:`MemoryStore`
-pointed at a different path (e.g. ``data/memories/shared.jsonl``).
+One line per trajectory. The embedding is the task query. Search is
+brute-force cosine over those vectors.
 """
 
 from __future__ import annotations
@@ -44,13 +22,10 @@ Outcome = Literal["successful", "failed", "shared"]
 
 @dataclass
 class MemoryItem:
-    """One distilled ReasoningBank memory item.
+    """One ReasoningBank item: title, description, and content.
 
-    Fields match the paper's schema (Appendix A.1): ``title`` is the
-    short identifier, ``description`` is a one-sentence summary, and
-    ``content`` carries the distilled reasoning steps. All three are
-    populated by the LLM extractor; an item missing any of them is
-    treated as malformed and dropped before reaching the store.
+    The extractor fills all three. An item missing any field is dropped
+    before it reaches the store.
     """
 
     title: str
@@ -71,12 +46,10 @@ class MemoryItem:
 
 @dataclass
 class MemoryEntry:
-    """One trajectory's worth of ReasoningBank memory.
+    """One trajectory's memories: query, outcome, and up to three items.
 
-    ``query`` is the task aim; it is the *only* field used for
-    retrieval embedding (Appendix A.2 "ReasoningBank Storage"). All
-    items in the entry share one ``outcome`` because the
-    LLM-as-Judge produces one signal per trajectory.
+    The embedding is over query. All items share one outcome from the
+    judge.
     """
 
     user_id: str
@@ -87,7 +60,7 @@ class MemoryEntry:
     created_at: str = ""
 
     def to_jsonl_dict(self) -> dict[str, Any]:
-        """Return a JSON-serialisable dict for the on-disk JSONL line."""
+        """JSON dict for one JSONL line."""
         return {
             "user_id": self.user_id,
             "query": self.query,
@@ -98,14 +71,14 @@ class MemoryEntry:
         }
 
     def to_dict_without_embedding(self) -> dict[str, Any]:
-        """Return a JSON-serialisable dict omitting the embedding vector."""
+        """JSON dict without the embedding vector."""
         data = self.to_jsonl_dict()
         del data["embedding"]
         return data
 
     @classmethod
     def from_jsonl_dict(cls, data: dict[str, Any]) -> MemoryEntry:
-        """Hydrate an entry from a parsed JSONL line in the WP1.6 schema."""
+        """Rebuild an entry from one parsed JSONL line."""
         return cls(
             user_id=data["user_id"],
             query=str(data.get("query", "")),
@@ -117,15 +90,10 @@ class MemoryEntry:
 
 
 def _coerce_outcome(raw: Any) -> Outcome:
-    """Constrain ``raw`` to one of the three literal outcomes.
+    """Map raw to successful, failed, or shared.
 
-    Defaults to ``"failed"`` on any unrecognised value so a hand-edited
-    JSONL file with a typo does not silently produce a memory tagged
-    as a validated strategy. ``"shared"`` is recognised so the WP2
-    cross-user store (WP2-plan §7.1 / §8.1) round-trips cleanly when
-    loaded back via :meth:`MemoryStore.load`; pre-WP2 per-user JSONLs
-    that only ever wrote ``"successful"`` / ``"failed"`` continue to
-    load identically.
+    Unrecognised values become failed. shared is kept so the
+    cross-user store round-trips through load.
     """
     if raw == "successful":
         return "successful"
@@ -135,16 +103,14 @@ def _coerce_outcome(raw: Any) -> Outcome:
 
 
 def _utcnow_iso() -> str:
-    """Return the current UTC time as an ISO-8601 string."""
+    """UTC now as an ISO-8601 string."""
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
 def _cosine_top_k(query: np.ndarray, matrix: np.ndarray, k: int) -> list[int]:
-    """Return indices of the ``k`` rows in ``matrix`` most similar to ``query``.
+    """Indices of the k rows in matrix closest to query by cosine.
 
-    Uses cosine similarity. Zero-norm rows would produce NaNs, so the
-    denominator is clamped to a small positive number; in practice
-    sentence-transformers outputs are never zero-length.
+    Zero-norm rows are clamped so the division does not produce NaNs.
     """
     if matrix.shape[0] == 0 or k <= 0:
         return []
@@ -160,11 +126,10 @@ def _cosine_top_k(query: np.ndarray, matrix: np.ndarray, k: int) -> list[int]:
 
 
 class MemoryStore:
-    """Per-user JSONL-backed memory store with in-memory cosine search.
+    """JSONL store with in-memory cosine search.
 
-    The on-disk format is one JSON object per line (no trailing comma,
-    no array wrapper) so a partial write of a single ``add_entry`` cannot
-    corrupt earlier records, and the file remains easy to read by hand.
+    One JSON object per line. The same class on a different path is the
+    shared store; those embeddings are over the label rather than the task.
     """
 
     def __init__(self, path: Path, user_id: str, embedder: Embedder) -> None:
@@ -176,11 +141,10 @@ class MemoryStore:
 
     @classmethod
     def load(cls, path: Path, user_id: str, embedder: Embedder) -> MemoryStore:
-        """Construct a store and populate it from ``path`` if the file exists.
+        """Build a store and load path if the file exists.
 
-        A missing file is not an error: it just means this user has no
-        memories yet, and the first :meth:`add_entry` call will create
-        the file (along with any missing parent directories).
+        A missing file is fine: the user has no memories yet, and the
+        first add_entry creates it.
         """
         store = cls(path=path, user_id=user_id, embedder=embedder)
         if store.path.exists():
@@ -212,13 +176,10 @@ class MemoryStore:
         outcome: Outcome,
         items: Iterable[MemoryItem],
     ) -> MemoryEntry:
-        """Embed ``query`` and append the entry on disk and in memory.
+        """Embed query, then append the entry on disk and in memory.
 
-        The embedding is computed over ``query`` (not over the items)
-        and stored inline on the JSONL line so reload never has to
-        call the model again. Empty ``items`` are allowed but
-        discouraged; callers should drop a 0-item extraction at the
-        pipeline layer rather than write a useless entry.
+        For private memories query is the task; for shared memories it
+        is the label. Reload reads the stored vector and does not re-embed.
         """
         item_list = list(items)
         embedding = self.embedder.embed(query)
@@ -241,12 +202,10 @@ class MemoryStore:
             fh.write(json.dumps(entry.to_jsonl_dict(), ensure_ascii=False) + "\n")
 
     def search(self, query: str, *, k: int) -> list[MemoryEntry]:
-        """Return the ``k`` stored entries whose query is most similar to ``query``.
+        """Return the k stored entries closest to query by cosine.
 
-        Returns an empty list when the store is empty or ``k <= 0``.
-        Results are sorted by descending cosine similarity over the
-        stored query embeddings. The caller is responsible for
-        flattening ``entry.items`` if it wants a flat list of items.
+        Empty store or k <= 0 returns an empty list. Results are
+        sorted by descending similarity.
         """
         if not self._entries or k <= 0:
             return []
@@ -255,7 +214,7 @@ class MemoryStore:
         return [self._entries[i] for i in indices]
 
     def all(self) -> list[MemoryEntry]:
-        """Return every stored entry in insertion order (defensive copy)."""
+        """Every stored entry in insertion order (a copy)."""
         return list(self._entries)
 
     def __len__(self) -> int:

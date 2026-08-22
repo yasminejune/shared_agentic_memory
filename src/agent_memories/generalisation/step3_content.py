@@ -1,9 +1,11 @@
 """Step 3: InvisibleInk content generation for qualifying label buckets.
 
-Accounting ``b`` is the gate threshold (default 7). Large buckets are
-split into several InvisibleInk runs: while at least ``2b`` members
-remain, a prefix of ``b`` is peeled off; the last run takes the rest
-(size ``b`` … ``2b−1``). Writes one ``contents.jsonl`` row per chunk.
+Generates the content field only. Markdown title headers would spend
+privacy budget, so they are not produced here. Accounting b is the gate
+threshold (default 7). Large buckets are split into several InvisibleInk
+runs: while at least 2b members remain, a prefix of b is peeled off;
+the last run takes the rest (size b ... 2b-1). Writes one contents.jsonl
+row per chunk.
 """
 
 from __future__ import annotations
@@ -41,11 +43,10 @@ T = TypeVar("T")
 
 
 def _chunks(entries: Sequence[T], b: int) -> list[list[T]]:
-    """Split ``entries`` into InvisibleInk batches of size about ``b``.
+    """Split entries into InvisibleInk batches of size about b.
 
-    Prefix chunks of ``b`` while at least ``2b`` remain; the last chunk
-    always takes the rest (size in ``[b, 2b−1]``). Remainders are not
-    carried over.
+    Prefix chunks of b while at least 2b remain; the last chunk always
+    takes the rest (size in [b, 2b-1]). Remainders are not carried over.
     """
     chunks: list[list[T]] = []
     rest = list(entries)
@@ -69,7 +70,7 @@ def run_content_generation(
     chunk_size: int = GEMMA_CHUNK_SIZE,
     generate_fn: GenerateFn = generate_with_oom_fallback,
 ) -> list[dict[str, Any]]:
-    """Generate one ``content`` string per InvisibleInk chunk."""
+    """Generate one content string per InvisibleInk chunk."""
     records: list[dict[str, Any]] = []
     for bucket in qualifying:
         label = str(bucket["label"])

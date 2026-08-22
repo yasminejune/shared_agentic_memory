@@ -1,11 +1,6 @@
-"""WP3.2 — Build ReasoningBank memories from WebArena trajectory CSV rows.
+"""Build ReasoningBank memories from a WebArena trajectory CSV.
 
-Reads ``data/webarena/trajectories.csv`` (produced by ``run_webarena.py``)
-and writes judge outcomes, extracted memory items, and embeddings to
-``data/webarena/trajectories_memories.csv``.
-
-Resume skips task_ids already present in the output CSV with a non-empty
-``judge_outcome``.
+Output: data/webarena/trajectories_memories.csv
 """
 
 from __future__ import annotations
@@ -125,7 +120,7 @@ def main(argv: list[str] | None = None) -> None:
         "--trajectories-csv",
         type=Path,
         default=DEFAULT_TRAJECTORIES_CSV,
-        help="Input trajectories CSV from run_webarena.py",
+        help="Input trajectories CSV",
     )
     parser.add_argument(
         "--output-csv",

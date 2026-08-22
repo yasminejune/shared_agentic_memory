@@ -1,15 +1,4 @@
-"""Unit tests for the graph-level safety properties added in WP1.3.
-
-These tests run the compiled LangGraph but use a fake Page so they
-stay browser-free. They verify:
-
-* ``make_act`` captures dispatch exceptions into ``history`` instead of
-  crashing the graph;
-* the ``max_steps`` cap terminates a loop that would otherwise run
-  indefinitely (parse failures forever);
-* a parse failure routes back to Observe and the next Think turn sees
-  the failure in ``history``.
-"""
+"""Tests for graph-level loop safety (max_steps, exception routing)."""
 
 from __future__ import annotations
 
@@ -22,7 +11,7 @@ from agent_memories.agent.nodes import make_act, make_think
 
 
 class _FakePage:
-    """Tiny Page double that exposes only what Observe and Act need."""
+    """Page double that exposes only what Observe and Act need."""
 
     def __init__(self, *, snapshot: str = "- button [ref=e1]") -> None:
         self.url = "about:blank"
@@ -105,7 +94,6 @@ def test_act_captures_dispatch_exceptions_into_history() -> None:
 
 @pytest.mark.unit
 def test_max_steps_caps_a_parse_failure_loop() -> None:
-    """An LLM that never produces a parseable action must still terminate."""
     page = _FakePage()
     # The client always returns nonsense, so every Think is a parse failure.
     client = _ScriptedClient(["nonsense"] * 100)
@@ -146,14 +134,6 @@ class _AlwaysTimingOutClient:
 
 @pytest.mark.unit
 def test_loop_propagates_chat_exceptions() -> None:
-    """A chat-client exception must escape the graph, not be swallowed.
-
-    The simplified contract is: any ``client.chat`` failure (timeout,
-    HTTP 404 for an unpulled Ollama model, auth error) propagates up
-    through the graph. The runner's ``finally`` block then closes the
-    browser and the user gets one real error instead of ``max_steps``
-    iterations of identical failures.
-    """
     page = _FakePage()
     graph = build_graph(page, make_think(_AlwaysTimingOutClient()), max_steps=4)  # type: ignore[arg-type]
 

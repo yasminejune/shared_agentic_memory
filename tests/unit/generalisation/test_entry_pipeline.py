@@ -1,4 +1,4 @@
-"""Unit tests for entry-level WP2 batching and privacy accounting."""
+"""Tests for entry-level WP2 batching and privacy accounting."""
 
 from __future__ import annotations
 

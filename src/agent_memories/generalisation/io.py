@@ -1,10 +1,8 @@
-"""Shared paths, artefacts, and CSV loading for the InvisibleInk WP2 steps.
+"""Shared paths, artefacts, and CSV loading for the four pipeline steps.
 
-The memories CSV contract matches
-``scripts/webarena/common.load_memory_entries_from_csv`` (extracted rows
-only, embedding re-attached). The loader lives here rather than being
-imported from that module because ``scripts/webarena/common.py`` pulls
-in BrowserGym at import time.
+The memories CSV contract matches scripts/webarena/common (extracted
+rows only, embedding re-attached). The loader lives here because that
+module pulls in BrowserGym at import time.
 """
 
 from __future__ import annotations
@@ -28,7 +26,7 @@ DELTA = 1e-5
 TAU = 1.0
 TOP_K = 100
 STEP1_MAX_TOKENS = 1024
-STEP3_MAX_TOKENS = 80
+STEP3_MAX_TOKENS = 100
 GEMMA_CHUNK_SIZE = 8
 QWEN_MODEL = "qwen3.5:4b-nvfp4"
 
@@ -40,12 +38,12 @@ DEFAULT_SHARED_STORE = DEFAULT_MEMORY_DIR / "shared.jsonl"
 
 
 def memories_csv_for_run(run: int) -> Path:
-    """Return ``data/webarena/trajectories_memories_{run}.csv``."""
+    """Return data/webarena/trajectories_memories_{run}.csv."""
     return REPO_ROOT / "data" / "webarena" / f"trajectories_memories_{run}.csv"
 
 
 def work_dir_for_run(run: int) -> Path:
-    """Return ``data/webarena/shared_memory_run_{run}/``."""
+    """Return data/webarena/shared_memory_run_{run}/."""
     return REPO_ROOT / "data" / "webarena" / f"shared_memory_run_{run}"
 
 
@@ -66,7 +64,7 @@ def buffer_path(work_dir: Path) -> Path:
 
 
 def add_io_arguments(parser: argparse.ArgumentParser) -> None:
-    """Attach ``--run``, ``--memories-csv``, and ``--work-dir``."""
+    """Attach --run, --memories-csv, and --work-dir."""
     parser.add_argument(
         "--run",
         type=int,
@@ -88,7 +86,7 @@ def add_io_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def resolve_io_paths(args: argparse.Namespace) -> tuple[Path, Path]:
-    """Return ``(memories_csv, work_dir)`` from parsed CLI args."""
+    """Return (memories_csv, work_dir) from parsed CLI args."""
     csv_path = (
         args.memories_csv if args.memories_csv is not None else memories_csv_for_run(args.run)
     )
@@ -97,7 +95,7 @@ def resolve_io_paths(args: argparse.Namespace) -> tuple[Path, Path]:
 
 
 def render_item_block(entry: MemoryEntry) -> str:
-    """Render one trajectory entry's items for a Step-3 prompt row."""
+    """Render one trajectory entry's items for a Step 3 prompt row."""
     return "\n".join(
         f"Memory {index}: {item.title} | {item.description} | {item.content}"
         for index, item in enumerate(entry.items, start=1)
@@ -105,11 +103,11 @@ def render_item_block(entry: MemoryEntry) -> str:
 
 
 def load_memory_entries_from_csv(csv_path: Path) -> list[tuple[int, MemoryEntry]]:
-    """Load ``(task_id, MemoryEntry)`` pairs from the memories CSV.
+    """Load (task_id, MemoryEntry) pairs from the memories CSV.
 
-    Rows without an extracted memory (``memory_extracted != True``) or
+    Rows without an extracted memory (memory_extracted != True) or
     without a stored embedding are skipped. Same contract as
-    ``scripts/webarena/common.load_memory_entries_from_csv``.
+    scripts/webarena/common.load_memory_entries_from_csv.
     """
     if not csv_path.exists():
         raise FileNotFoundError(f"Memories file not found: {csv_path}")
@@ -134,7 +132,7 @@ def load_memory_entries_from_csv(csv_path: Path) -> list[tuple[int, MemoryEntry]
 
 
 def account_to_dict(account: InvisibleInkAccount) -> dict[str, Any]:
-    """JSON-serialise an :class:`InvisibleInkAccount`."""
+    """JSON-serialise an InvisibleInkAccount."""
     return asdict(account)
 
 
@@ -166,7 +164,7 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
 
 
 def entry_from_payload(data: dict[str, Any]) -> MemoryEntry:
-    """Hydrate a :class:`MemoryEntry` from an assignments-file record."""
+    """Hydrate a MemoryEntry from an assignments-file record."""
     return MemoryEntry.from_jsonl_dict(data)
 
 

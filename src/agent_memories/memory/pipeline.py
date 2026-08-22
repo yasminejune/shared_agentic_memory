@@ -1,41 +1,7 @@
-"""WP1.6 ReasoningBank memory-creation pipeline.
+"""Build a ReasoningBank memory from a finished run.
 
-Runs *after* the LangGraph loop completes (called by the WP1.5 runner
-on the final :class:`AgentState`, not from inside the graph). The
-pipeline implements the closed-loop "memory construction" half of
-ReasoningBank (Ouyang et al. 2025, §3.2, Appendix A.1 + A.2):
-
-1. **LLM-as-Judge.** A binary classifier reads the task aim, the
-   trajectory, the final webpage state and an (optional) bot response
-   and emits ``Status: success`` or ``Status: failure``. Temperature
-   is 0.0 for determinism (paper Appendix A.2).
-2. **Outcome-routed distillation.** A success-only system prompt or a
-   failure-only system prompt is selected; the LLM emits up to three
-   ``# Memory Item i`` markdown blocks each carrying ``## Title``,
-   ``## Description`` and ``## Content``. Temperature is 1.0 (paper
-   Appendix A.2).
-3. **Append.** Parsed items are written as a single :class:`MemoryEntry`
-   keyed on the task query and tagged with the outcome.
-
-The three system prompts and the two user-prompt templates are quoted
-verbatim from the paper (Figures 8 + 9 in Appendix A.1); only
-whitespace formatting has been adjusted to match Python string style.
-
-Deviations from the paper (flagged for the methodology chapter):
-
-* Judge default on malformed output is ``"failed"``. The paper does
-  not specify a default; choosing ``failed`` keeps the agent learning
-  from the unclear case via the failure-distillation prompt rather
-  than silently storing strategies derived from an unverified
-  trajectory.
-* ``response`` is always passed as ``"N/A"``. The paper's own
-  user-prompt template contains ``{response if response else "N/A"}``;
-  our agent has no equivalent of a final "bot response", so the
-  N/A fallback is the prescribed behaviour.
-* The raw trajectory is not persisted alongside the items (the paper
-  stores ``{query, trajectory, items}``). Storing the trajectory adds
-  no downstream value for the WP2/WP4 evaluation and bloats the
-  per-user JSONL.
+Judge the trajectory (success/failure), then extract up to three
+title/description/content items. Nothing is written if extraction is empty.
 """
 
 from __future__ import annotations
@@ -164,11 +130,10 @@ EXTRACTOR_USER_PROMPT_TEMPLATE = "Query: {query}\nTrajectory: {trajectory}"
 
 @dataclass(frozen=True)
 class MemoryBuildResult:
-    """In-memory output of :meth:`MemoryPipeline.build_from_run`.
+    """Judge outcome and optional entry from build_from_run.
 
-    ``judge_outcome`` is always the LLM-as-Judge signal. ``entry`` is
-    ``None`` when the extractor produced zero parseable items (distinct
-    from a judge failure).
+    entry is None when the extractor produced nothing parseable, which
+    is not the same as a failed judge.
     """
 
     judge_outcome: Outcome
@@ -177,7 +142,7 @@ class MemoryBuildResult:
 
 
 class MemoryPipeline:
-    """Two-stage ReasoningBank memory creator backed by a chat LLM and a store."""
+    """Judge a finished run, then extract up to three memory items."""
 
     def __init__(
         self,
@@ -193,13 +158,9 @@ class MemoryPipeline:
         *,
         final_state: str = "",
     ) -> MemoryEntry | None:
-        """Write one new :class:`MemoryEntry` based on the run captured in ``state``.
+        """Write one MemoryEntry from the finished run in state.
 
-        Returns the new entry on success. Returns ``None`` when the
-        extractor produces zero parseable memory items (the run is
-        then dropped: ReasoningBank's "simple addition" consolidation
-        treats an empty extraction the same as no new memory at all,
-        rather than writing a useless entry).
+        Returns None if extraction is empty; nothing is written then.
         """
         result = self.build_from_run(
             state,
@@ -224,7 +185,7 @@ class MemoryPipeline:
         embedder: Embedder,
         response: str = "N/A",
     ) -> MemoryBuildResult:
-        """Build judge outcome and optional :class:`MemoryEntry` without writing to disk."""
+        """Judge and extract without writing to disk."""
         aim = state.get("aim", "")
         trajectory = _serialise_trajectory(state)
 
@@ -268,12 +229,9 @@ class MemoryPipeline:
         final_state: str,
         response: str = "N/A",
     ) -> Outcome:
-        """Run the LLM-as-Judge and return the binary outcome.
+        """LLM-as-judge: successful or failed.
 
-        Malformed output (no parseable ``Status:`` line) defaults to
-        ``"failed"`` so the agent still learns from the unclear case
-        via the failure-distillation path, rather than silently
-        storing strategies derived from an unverified trajectory.
+        Malformed output (no parseable Status line) is treated as failed.
         """
         user_prompt = JUDGE_USER_PROMPT_TEMPLATE.format(
             intent=intent,
@@ -290,11 +248,10 @@ class MemoryPipeline:
         return _parse_judge_status(reply)
 
     def _extract(self, *, aim: str, trajectory: str, outcome: Outcome) -> list[MemoryItem]:
-        """Run the success- or failure-specific extractor and parse items.
+        """Extract up to three title/description/content items.
 
-        The paper allows at most three items per trajectory; we cap
-        the parsed list at three to match. Items missing any of the
-        three fields are dropped as malformed.
+        The success or failure prompt is chosen from the judge outcome.
+        Items missing any of the three fields are dropped.
         """
         system_prompt = SUCCESS_SYSTEM_PROMPT if outcome == "successful" else FAILURE_SYSTEM_PROMPT
         user_prompt = EXTRACTOR_USER_PROMPT_TEMPLATE.format(query=aim, trajectory=trajectory)
@@ -319,12 +276,9 @@ _CONTENT_BODY = re.compile(
 
 
 def _parse_judge_status(reply: str) -> Outcome:
-    """Extract the ``success`` / ``failure`` token from the judge reply.
+    """Read success or failure from the judge reply.
 
-    Anything other than a clear ``success`` token (case-insensitive,
-    optionally wrapped in quotes) is treated as a failure so the
-    pipeline never stores a "validated strategy" derived from an
-    unverified trajectory.
+    Anything other than a clear success token is treated as failed.
     """
     match = _STATUS_LINE.search(reply)
     if match is None:
@@ -333,14 +287,10 @@ def _parse_judge_status(reply: str) -> Outcome:
 
 
 def _parse_memory_items(reply: str) -> list[MemoryItem]:
-    """Parse 0-N :class:`MemoryItem`s from the extractor's markdown reply.
+    """Parse title/description/content items from the extractor reply.
 
-    Items are delimited by ``# Memory Item N`` headers. Each block
-    must contain a ``## Title``, ``## Description`` and ``## Content``
-    section; blocks missing any one of those are dropped. Surrounding
-    chatter before the first item header is ignored, matching the
-    paper's "strictly follow the Markdown format" instruction without
-    crashing on a verbose model.
+    Blocks are split on Memory Item headers. A block missing any of
+    the three fields is dropped. Text before the first header is ignored.
     """
     if not reply.strip():
         return []
@@ -363,10 +313,9 @@ def _parse_memory_items(reply: str) -> list[MemoryItem]:
 
 
 def _split_into_item_blocks(reply: str) -> list[str]:
-    """Split the extractor reply at each ``# Memory Item N`` header.
+    """Split the extractor reply on each Memory Item header.
 
-    Anything before the first header is dropped so verbose preambles
-    do not become a phantom 0th item.
+    Text before the first header is dropped.
     """
     matches = list(_ITEM_BLOCK.finditer(reply))
     if not matches:
@@ -387,18 +336,12 @@ def _extract_first(pattern: re.Pattern[str], chunk: str) -> str | None:
 
 
 def _collapse_whitespace(text: str) -> str:
-    """Normalise a multi-line content section into single-spaced prose."""
+    """Collapse a multi-line content section into single-spaced prose."""
     return " ".join(text.split()).strip()
 
 
 def _serialise_trajectory(state: AgentState) -> str:
-    """Render the agent's trajectory in the same dialect Think reads.
-
-    The judge and the extractor both want a compact view of what the
-    agent did, not the full ARIA observation at every step. Mirroring
-    the Think prompt's history block keeps the curator LLM and the
-    agent LLM on the same dialect.
-    """
+    """Render history as the compact step/thought/outcome lines Think uses."""
     history = state.get("history", [])
     if not history:
         return "(no recorded steps)"

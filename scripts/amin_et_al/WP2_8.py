@@ -1,37 +1,7 @@
-"""WP2 round-1 label-generation standalone harness (WP2-plan §3.2).
+"""Amin numbered-list labels on the toy memories in examples.csv.
 
-Reads the 10 toy memories from ``scripts/amin_et_al/examples.csv``,
-runs the existing Amin et al. Algorithm 1 mechanism
-(:func:`agent_memories.agent.privacy.generate`) once, and produces
-``k`` DP-released topic labels that summarise what the batch has in
-common. Each invocation generates fresh labels and overwrites
-``scripts/amin_et_al/outputs/labels.jsonl`` so a downstream round-2
-caller always sees the most recent label set.
-
-Round 1 reuses the same Amin per-token loop as round 2; the only
-difference is the prompt template. ``generate`` is called with
-``wrap_fn=wrap_label`` and ``k=K``, which selects the WP2-plan §3.2
-numbered-list template :data:`agent_memories.agent.privacy.prompts.LABEL_PROMPT`
-instead of the round-2 :data:`~agent_memories.agent.privacy.prompts.GENERIC_PROMPT`
-lesson template. The label template ends literally on ``Topics:\\n1.``
-so the first sampled token continues label 1's text; subsequent
-labels are produced by the model emitting ``\\n2.``, ``\\n3.`` and
-so on.
-
-Parsing: the raw DP output is the continuation after the consumed
-``Topics:\\n1.`` anchor, so the parser prepends the literal ``"1."``
-back, splits on newlines, and matches each line against
-``^\\s*(\\d+)\\.\\s*(.+?)\\s*$``. Slots that do not yield a clean
-label fall back to the literal string ``label_<i>`` per WP2-plan
-§3.2; the round-2 pipeline still receives ``k`` entries so its
-batch assignment does not silently lose the round-1 privacy spend.
-
-Production WP2 round 1 will live in
-``src/agent_memories/generalisation/labelling.py`` (WP2-plan §6.1)
-and consume real WP1.6 per-user memories. This script is the
-demo-harness equivalent that ``WP2_3.py`` already is for round 2;
-the prompt template, the parser, and the fallback policy are all
-reusable from here.
+One Algorithm 1 call, parse k labels (fallback label_<i>), overwrite
+scripts/amin_et_al/outputs/labels.jsonl. Diagnostic only.
 """
 
 from __future__ import annotations
@@ -57,8 +27,8 @@ S = 10  # batch size (10 examples)
 C = 50.0  # logit clip
 TAU = 1.0  # private temperature
 TAU_PUBLIC = 1.5  # public temperature
-SIGMA = 0.1  # SVT noise scale; see module docstring for rationale
-THETA = 0.0  # SVT threshold; see module docstring for rationale
+SIGMA = 0.1  # SVT noise scale
+THETA = 0.0  # SVT threshold
 R_MAX = 80  # cap passed to solve_r
 EPSILON_DEFAULT = 200.0
 K_DEFAULT = 5

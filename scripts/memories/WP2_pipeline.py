@@ -1,94 +1,8 @@
-"""End-to-end WP2 cross-user shared-memory pipeline driver.
+"""Older Amin shared-memory driver. One process, whole cycle.
 
-One script, top-level constants for every knob, one ``main()``.
-Takes a task aim (e.g. ``"Find cheapest hairbrush on Amazon"``),
-runs ``N_TRAJECTORIES`` private agent trajectories across distinct
-simulated user_ids, then drives the two-round Amin et al. (2024)
-shared-memory pipeline with entry-level privacy, fixed public expected
-batch sizes, and X-per-label gating.
-
-The pipeline flow (consistent with the WP2-plan §2 architecture
-diagram, with the two user-confirmed deviations recorded below):
-
-1. **Trajectories.** Spawn ``N_TRAJECTORIES`` ``scripts/memories/WP1_5.py``
-   subprocesses, each with its own ``--user-id`` so each writes to a
-   distinct ``data/memories/<user_id>.jsonl``. ``--skip-trajectories``
-   bypasses this step and re-uses whatever per-user stores are
-   already on disk (useful for the smoke run and for re-running the
-   shared-memory pipeline on a fixed input).
-
-2. **Assemble cycle inputs.** Select exactly the public
-   ``B = --entries-per-cycle`` trajectory entries whose IDs are absent
-   from ``data/memories/.shared_state.json#step1_processed_entry_ids``.
-   Separately load the carry-over buffer from
-   ``data/memories/.shared_buffer.jsonl``. Carry-over entries have
-   already paid their round-1 privacy cost and therefore rejoin the
-   pipeline at round-2 batch assignment, not at round 1.
-
-3. **Round 1 (Amin Algorithm 1, S = B).** Each ``MemoryEntry`` is one
-   protected example and one prompt row. ``S`` is the public fixed
-   cycle size, ``delta`` is fixed explicitly, and ``r`` is solved
-   against ``EPSILON_PER_ROUND``. Each entry's parent trajectory
-   query is rendered via :func:`_render_query_block`. The DP-released
-   labels become the ``query`` field (and hence the embedding
-   anchor) of every shared memory; feeding queries keeps those
-   labels in the same semantic space as the future task aims that
-   retrieval will embed against (WP2-plan §7.1). The mechanism then
-   samples ``K_LABELS`` topic labels via
-   :func:`agent_memories.agent.privacy.generate` with
-   ``wrap_fn=wrap_label``. The JSON output is parsed via
-   :func:`parse_json_labels` (the production
-   :data:`~agent_memories.agent.privacy.prompts.LABEL_PROMPT` is the
-   JSON template); missing slots become ``label_<i>``.
-
-4. **Round-2 batch assignment.** Embed the ``K`` new labels through the
-   same :class:`~agent_memories.memory.Embedder` the WP1.6 stores
-   use, then call :func:`assign_memories_to_labels` to bucket every
-   new and carry-over entry under its nearest new label by cosine
-   similarity. The label count remains exactly ``K``; only the
-   number of entries assigned to each bucket varies. WP2-plan §4.3
-   (the WP2.5 resolution) justifies that this satisfies Amin
-   Assumption 1: each prompt's bucket depends only on the prompt
-   itself and the DP-released labels (public via post-processing).
-
-5. **X-gating.** Per the user's confirmed ``keep_and_document``
-   choice, the gating threshold ``X_PER_LABEL > 1`` is honoured
-   even though it introduces content-dependent gating (WP2-plan §10
-   open question 2). Every qualifying bucket is passed to round 2 in
-   full; only buckets below ``X`` are pushed to the carry-over buffer
-   for the next trigger.
-
-6. **Round 2 (Amin Algorithm 1, expected S = X).** Per qualifying
-   label, one Amin run receives every entry as a separate prompt row
-   (each row concatenates that entry's 1-3 memory items) while
-   retaining ``S = X_PER_LABEL`` as the expected batch size,
-   using the same fixed ``delta`` as round 1, and ``r`` solved against
-   ``EPSILON_PER_ROUND``. Amin et al. permit actual batch sizes to
-   differ from expected ``S`` without invalidating Theorem 1. The
-   wrap function is :func:`agent_memories.agent.privacy.prompts.wrap`
-   with the DP-released label as ``label=...``; the output is the
-   ``content`` field of a single shared :class:`MemoryItem`.
-
-7. **Post-processing (off-DP, free).**
-   :func:`agent_memories.generalisation.title_and_description`
-   turns ``(content, label)`` into the matching ``title`` and
-   ``description`` via Qwen / Ollama. By the post-processing
-   property of differential privacy this call contributes zero to
-   ``rho_total`` (WP2-plan §4.7).
-
-8. **Shared store write.** The completed
-   :class:`MemoryItem(title, description, content)` is appended to
-   ``data/memories/shared.jsonl`` via the shared
-   :class:`MemoryStore` (``user_id="shared"``, ``query=<label>``,
-   ``outcome="shared"``).
-
-9. **Persist buffer + checkpoint + audit log.** The carry-over
-   buffer is overwritten with this trigger's "set aside" entries;
-   the checkpoint records which entries have completed round 1,
-   separately records which entries have contributed to a shared
-   memory, and accumulates ``cumulative_epsilon`` across triggers;
-   one line is appended to ``data/memories/.shared_audit.jsonl``
-   with the per-round ``(S, r, eps)``.
+The production steps live in src/agent_memories/generalisation. This
+file still runs N private trajectories, then Amin labels, bucketing,
+content, and title/description, and writes data/memories/shared.jsonl.
 """
 
 from __future__ import annotations
@@ -127,12 +41,9 @@ from agent_memories.services.ollama_client import OllamaClient
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WP1_5_SCRIPT = REPO_ROOT / "scripts" / "memories" / "WP1_5.py"
 
-# ------------------------------------------------------------------
-# Trigger-level config (overridable via CLI flags below)
-# ------------------------------------------------------------------
 N_TRAJECTORIES = 5
-K_LABELS = 3  # Number of new labels to generate per trigger
-X_PER_LABEL = 5  # Number of entries required for a round-2 shared memory generation
+K_LABELS = 3
+X_PER_LABEL = 5
 
 AIM_DEFAULT = "Find cheapest hairbrush on Amazon"
 URL_DEFAULT = "https://www.amazon.co.uk"
@@ -142,9 +53,7 @@ MODEL_DEFAULT = "qwen"
 
 QWEN_MODEL = "qwen3.5:4b-nvfp4"
 
-# ------------------------------------------------------------------
-# Amin Algorithm 1 hyperparameters (one set, reused for both rounds)
-# ------------------------------------------------------------------
+# Amin Algorithm 1 knobs; both rounds reuse this set.
 C = 50.0
 TAU = 1.0
 TAU_PUBLIC = 1.5
@@ -154,9 +63,6 @@ R_MAX = 80
 EPSILON_PER_ROUND = 200.0
 DELTA = 1e-5
 
-# ------------------------------------------------------------------
-# Filesystem layout
-# ------------------------------------------------------------------
 SHARED_STORE_FILENAME = "shared.jsonl"
 BUFFER_FILENAME = ".shared_buffer.jsonl"
 CHECKPOINT_FILENAME = ".shared_state.json"
@@ -177,19 +83,14 @@ def _render_item_block(entry: MemoryEntry) -> str:
 
 
 def _render_query_block(entry: MemoryEntry) -> str:
-    """Render one entry's parent query as its round-1 prompt row.
+    """Parent query as the round-1 prompt row.
 
-    Round 1 synthesises the DP-released labels that become the
-    ``query`` field (and hence the embedding anchor) of every shared
-    memory written to ``data/memories/shared.jsonl``. Feeding the
-    per-trajectory task aim -- rather than the reasoning-step items
-    block -- keeps those labels in the same semantic space as the
-    task aims that future agent queries will embed against, which is
-    the retrieval direction the shared store is designed for
-    (WP2-plan §7.1, ``store.py`` ``MemoryStore.add_entry``). Round 2
-    still uses :func:`_render_item_block` because its output is the
-    distilled ``content`` field, which needs the concrete reasoning
-    steps.
+    Round 1 produces the DP labels that become the ``query`` (and
+    therefore the embedding) of every shared memory. Feeding the
+    trajectory aim, not the item block, keeps those labels in the
+    same space as future task aims. Round 2 still uses
+    ``_render_item_block`` because its output is ``content``, which
+    needs the actual reasoning steps.
     """
     return entry.query
 
@@ -207,10 +108,9 @@ def _run_trajectories(
 ) -> list[str]:
     """Spawn ``n`` WP1.5 subprocesses; return the per-trajectory user_ids.
 
-    Each trajectory writes to ``data/memories/<user_id>.jsonl``. A
-    non-zero exit code from any one trajectory is logged but does
-    not abort the loop -- the pipeline still tries to consume
-    whichever per-user stores are non-empty afterwards.
+    Each trajectory writes ``data/memories/<user_id>.jsonl``. A
+    non-zero exit is logged and the loop continues; later steps
+    consume whichever stores actually have entries.
     """
     user_ids = [f"{user_prefix}{i:02d}" for i in range(n)]
     for idx, user_id in enumerate(user_ids):
@@ -283,10 +183,9 @@ def _load_per_user_entries(
 ) -> list[MemoryEntry]:
     """Return trajectory entries that have not yet completed round 1.
 
-    Only ``<memory_dir>/user_*.jsonl`` is considered; the reserved
-    ``shared.jsonl`` (WP2.4 cross-user store) and any hidden file
-    (e.g. ``.shared_buffer.jsonl``) are excluded so the WP2 input
-    set is exactly "private per-user new memories".
+    Only ``user_*.jsonl``; ``shared.jsonl`` and hidden sidecars
+    (``.shared_buffer.jsonl`` and friends) are skipped so the input
+    set is private per-user memories only.
     """
     new_entries: list[MemoryEntry] = []
     for path in sorted(memory_dir.glob("user_*.jsonl")):
@@ -353,8 +252,7 @@ def _run_round1(
     """Run round 1 once; return labels, parsed flags, r, eps, delta.
 
     Every entry is one prompt row. Accounting uses the public fixed
-    cycle size rather than deriving ``s`` or ``delta`` from private
-    realised counts.
+    cycle size, not the realised private counts.
     """
     s = expected_batch_size
     if len(round1_batch) != s:
@@ -402,15 +300,15 @@ def _run_round2_for_label(
     target_epsilon: float,
     delta: float,
 ) -> tuple[str, int, float, float, PrivacyAccount] | None:
-    """Run one round-2 generate call; return DP content + privacy account.
+    """One round-2 generate call; DP content plus the privacy account.
 
-    Every entry assigned to the qualifying label is included. Privacy
-    accounting continues to use the fixed threshold as Amin et al.'s
-    expected batch size, which need not equal the actual batch size.
+    Every entry under this label is included. Accounting still uses
+    the fixed X threshold as expected batch size; that need not match
+    the actual batch.
 
-    Returns ``None`` when ``solve_r`` cannot fit even one private
-    token inside the budget (so the caller can skip the post-process
-    step for this label without aborting the whole trigger).
+    Returns None if solve_r cannot fit even one private token, so
+    the caller can skip post-processing for this label without
+    aborting the trigger.
     """
     s = expected_batch_size
     r = solve_r(target_epsilon, delta, s=s, c=C, tau=TAU, sigma=SIGMA, r_max=R_MAX)
@@ -491,9 +389,8 @@ def main(argv: list[str] | None = None) -> None:
         parser.error("--delta must be in (0, 1].")
     if args.x_per_label == 1:
         print(
-            "[WP2] WARNING: x_per_label=1 collapses the X-gating to 'always trigger'; "
-            "the per-trigger leak the user opted into (WP2-plan §10 OQ 2) does not "
-            "apply in this regime."
+            "[WP2] WARNING: x_per_label=1 always triggers round 2; "
+            "the per-trigger leak bound does not apply."
         )
 
     memory_dir = args.memory_dir
@@ -505,7 +402,6 @@ def main(argv: list[str] | None = None) -> None:
     load_dotenv()
     seed = load_random_seed()
 
-    # Run the agent trajectories to get the new entries
     if not args.skip_trajectories:
         _run_trajectories(
             n=args.n_trajectories,
@@ -555,8 +451,7 @@ def main(argv: list[str] | None = None) -> None:
         )
         return
 
-    # Generate exactly K labels from B new entry examples only. Carry-over
-    # entries already paid this privacy cost in an earlier trigger.
+    # K labels from the B new entries only. Carry-over already paid round 1.
     labels, label_flags, r_round1, eps_round1, delta_round1 = _run_round1(
         new_entries,
         expected_batch_size=args.entries_per_cycle,
@@ -566,12 +461,11 @@ def main(argv: list[str] | None = None) -> None:
     )
     step1_processed_ids.update(entry_id(entry) for entry in new_entries)
 
-    # Reassign both new and held entries to the newly generated labels.
+    # New + held entries, assigned onto this trigger's labels.
     assignments = assign_memories_to_labels(assignment_batch, labels, embedder=embedder)
     buckets = group_by_label(assignments, n_labels=args.k_labels)
     print(f"[WP2] Per-label bucket sizes: {[len(b) for b in buckets]}")
 
-    # Only generate a shared memory if there are sufficient bundles for the label
     gating = select_round2_inputs(buckets, x_per_label=args.x_per_label)
     print(
         f"[WP2] Triggered labels (bucket >= X={args.x_per_label}): "
@@ -586,15 +480,12 @@ def main(argv: list[str] | None = None) -> None:
     consumed_indices: set[int] = set()
     skipped_round2_indices: list[int] = []
     # Each triggered label's round-2 batch is a disjoint subset of the
-    # assignment dataset (the assignment step routes every entry to exactly
-    # one label), so by parallel composition (Amin Lemma 2; WP2-plan
-    # §2 line 30 and §4.1 line 169) the round-2 cost for this trigger is
-    # max(eps_r2) across labels, not the sum. The per-label values are
-    # collected here and reduced once the loop ends.
+    # assignment set (every entry goes to exactly one label). Parallel
+    # composition (Amin Lemma 2): trigger-level round-2 cost is
+    # max(eps_r2) across labels, not the sum. Collected here, reduced
+    # after the loop.
     eps_round2_per_label: list[float] = []
 
-    # Run round 2 of Amin et al to generate the shared memory for the triggered labels
-    # In a second step, generate the title and description for the shared memory
     for label_idx in gating.triggered_labels:
         label_str = labels[label_idx]
         entry_indices = gating.label_inputs[label_idx]
@@ -608,10 +499,8 @@ def main(argv: list[str] | None = None) -> None:
             delta=args.delta,
         )
         if result is None:
-            # Round 2 was skipped for budget reasons; the entries already
-            # paid the round-1 cost but did not contribute to a shared
-            # memory. Push them to the carry-over buffer so a future
-            # trigger can retry them if the privacy configuration changes.
+            # Budget too tight for round 2. Round 1 is already paid;
+            # park these in carry-over in case a later trigger retries.
             skipped_round2_indices.extend(entry_indices)
             continue
         content, r_r2, eps_r2, delta_r2, account = result
@@ -666,10 +555,10 @@ def main(argv: list[str] | None = None) -> None:
     for i in consumed_indices:
         consumed_ids.add(entry_id(assignment_batch[i]))
 
-    # Parallel composition across the disjoint per-label round-2 batches:
-    # the trigger-level round-2 cost is max(eps_r2), not sum (WP2-plan §4.1).
-    # The cumulative audit value conservatively adds every trigger's released
-    # mechanisms; carry-over memories do not pay round-1 cost again.
+    # Parallel composition across disjoint per-label round-2 batches:
+    # trigger-level round-2 cost is max(eps_r2), not the sum. The
+    # cumulative audit adds every trigger's released mechanisms;
+    # carry-over does not pay round 1 again.
     eps_round2_trigger = max(eps_round2_per_label) if eps_round2_per_label else 0.0
     delta_round2_trigger = args.delta if eps_round2_per_label else 0.0
     trigger_epsilon = eps_round1 + eps_round2_trigger

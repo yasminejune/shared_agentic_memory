@@ -1,10 +1,4 @@
-"""Unit tests for the ARIA-snapshot wrapper.
-
-These tests do not launch a browser. They stub the relevant slice of
-the Playwright Page API and check the wrapper's contract: it must call
-``page.aria_snapshot(mode="ai")`` exactly once, forward the result, and
-coerce falsy returns to the empty string.
-"""
+"""Tests for the ARIA-snapshot wrapper."""
 
 from __future__ import annotations
 
@@ -14,7 +8,7 @@ from agent_memories.agent.observation import format_aria_snapshot
 
 
 class _FakePage:
-    """Minimal Page double exposing only ``aria_snapshot``."""
+    """Page double exposing only aria_snapshot."""
 
     def __init__(self, snapshot: str | None) -> None:
         self._snapshot = snapshot

@@ -1,4 +1,4 @@
-"""Factory functions for BrowserGym-backed LangGraph nodes."""
+"""Observe, Think, and Act nodes for the BrowserGym WebArena loop."""
 
 from __future__ import annotations
 
@@ -18,8 +18,7 @@ from .env import THINK_SYSTEM_PROMPT, WebArenaEnvWrapper
 
 NodeFn = Callable[[AgentState], AgentState]
 
-# Covers the native reasoning trace and the action line together when
-# the WebArena runners construct OllamaClient with think=True.
+# Qwen with think=True returns the reasoning trace plus the action line.
 THINK_MAX_TOKENS = 1024
 
 
@@ -28,7 +27,7 @@ def _trace(line: str) -> None:
 
 
 def make_observe(wrapper: WebArenaEnvWrapper) -> NodeFn:
-    """Read the latest preprocessed observation from the env wrapper."""
+    """Copy url, title, and tree_yaml from the wrapper's last observation."""
 
     def observe(state: AgentState) -> AgentState:
         obs = wrapper.last_obs
@@ -54,7 +53,7 @@ def make_think(
     *,
     stuck_threshold: int = DEFAULT_STUCK_THRESHOLD,
 ) -> NodeFn:
-    """LLM Think node emitting one BrowserGym action string per turn."""
+    """Call Qwen and parse one BrowserGym action line from the reply."""
 
     def think(state: AgentState) -> AgentState:
         if _is_stuck(state["history"], stuck_threshold):
@@ -79,7 +78,7 @@ def make_think(
 
 
 def make_act(wrapper: WebArenaEnvWrapper) -> NodeFn:
-    """Execute a BrowserGym action via ``env.step``."""
+    """Run env.step. Exceptions are not caught; the runner treats them as infra errors."""
 
     def act(state: AgentState) -> AgentState:
         action_obj = state.get("action", {})
@@ -113,8 +112,7 @@ def _is_stuck(history: list[dict[str, Any]], threshold: int) -> bool:
         return False
     tail = history[-threshold:]
     first_thought = tail[0].get("thought", "")
-    # Empty thoughts count: repeated empty replies (e.g. a thinking budget
-    # that never reaches content) must abort rather than burn max_steps.
+    # Repeated empty replies (think budget never reached content) also abort.
     return all(r.get("thought", "") == first_thought for r in tail)
 
 
@@ -203,7 +201,7 @@ def _format_history(history: list[dict[str, Any]]) -> str:
 
 
 def extract_bot_response(state: AgentState) -> str:
-    """Return the last ``send_msg_to_user`` / ``report_infeasible`` answer if any."""
+    """Last send_msg_to_user text, or N/A if the run ended with report_infeasible."""
     for record in reversed(state.get("history", [])):
         action = record.get("action", "")
         if not isinstance(action, str):

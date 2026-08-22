@@ -1,1 +1,1 @@
-"""Offline WebArena LLM judge backed by Mistral."""
+"""Offline Mistral scoring for WebArena fuzzy_match and ua_match."""

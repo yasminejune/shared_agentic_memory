@@ -1,8 +1,7 @@
-"""Explicit random-seed helpers for reproducible evaluation runs.
+"""Read RANDOM_SEED from the environment and apply it.
 
-``RANDOM_SEED`` must be set in the environment (typically via ``.env``).
-There is no numeric default: a missing or invalid value fails fast so a
-run cannot silently proceed without a recorded seed.
+There is no numeric default. A missing or invalid value fails so a
+run cannot proceed without a recorded seed.
 """
 
 from __future__ import annotations
@@ -14,10 +13,9 @@ import numpy as np
 
 
 def load_random_seed() -> int:
-    """Read ``RANDOM_SEED`` from the environment.
+    """Read RANDOM_SEED from the environment.
 
-    Raises:
-        ValueError: If ``RANDOM_SEED`` is missing, empty, or not an int.
+    Raises ValueError if it is missing, empty, or not an int.
     """
     raw = os.environ.get("RANDOM_SEED")
     if raw is None or not str(raw).strip():
@@ -35,7 +33,7 @@ def load_random_seed() -> int:
 
 
 def set_global_seed(seed: int) -> None:
-    """Seed ``random``, ``numpy``, and ``torch`` (if installed)."""
+    """Seed random, numpy, and torch if it is installed."""
     random.seed(seed)
     np.random.seed(seed)
     try:

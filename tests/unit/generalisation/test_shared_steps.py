@@ -1,4 +1,4 @@
-"""Unit tests for the InvisibleInk shared-memory step functions."""
+"""Tests for the InvisibleInk shared-memory step functions."""
 
 from __future__ import annotations
 

@@ -1,10 +1,9 @@
-"""Score deferred WebArena judge calls using Mistral.
+"""Score deferred WebArena LLM-judge calls with Mistral.
 
-Patches ``webarena.evaluation_harness.helper_functions.generate_from_openai_chat_completion``
-to route through :class:`MistralClient` so the harness's own
-``llm_fuzzy_match`` and ``llm_ua_match`` execute with their verbatim
-prompts and verdict rules but against a pinned Mistral model instead
-of ``gpt-4-1106-preview``.
+The live harness reward is the official score. A subset of tasks also
+need fuzzy_match or ua_match; those were recorded during the run and
+are scored here. The harness match functions keep their original prompts
+but talk to a pinned Mistral model instead of gpt-4-1106-preview.
 """
 
 from __future__ import annotations
@@ -19,7 +18,7 @@ from agent_memories.services.mistral_client import MistralClient
 JUDGE_MODEL = "mistral-large-2512"
 JUDGE_MAX_TOKENS = 768
 JUDGE_TEMPERATURE = 0.0
-# Floor sleep before retrying a 429 so retries do not thrash the minute window.
+# Wait at least this long after a 429 so retries do not burn the next minute.
 RATE_LIMIT_RETRY_SLEEP = 60.0
 
 JUDGE_SCORES_COLUMNS = [
@@ -37,7 +36,7 @@ JUDGE_SCORES_COLUMNS = [
 
 
 def install_mistral_judge(client: MistralClient) -> None:
-    """Patch the harness to route LLM calls through the given MistralClient."""
+    """Patch the harness so judge calls go through this Mistral client."""
     from webarena.evaluation_harness import helper_functions
 
     def _mistral_chat_completion(
@@ -69,11 +68,10 @@ def install_mistral_judge(client: MistralClient) -> None:
 def score_single_call(
     call: dict[str, Any],
 ) -> tuple[float, str]:
-    """Run one deferred judge call through the patched harness.
+    """Run one recorded fuzzy_match or ua_match call.
 
-    Returns ``(verdict, status)`` where verdict is 0.0 or 1.0 on
-    success, and status is ``"scored"``, ``"unparseable"``, or
-    ``"judge_error: <detail>"``.
+    Returns (verdict, status). Verdict is 0.0 or 1.0 when scored;
+    status is "scored", "unparseable", or "judge_error: ...".
     """
     from webarena.evaluation_harness.helper_functions import (
         llm_fuzzy_match,
@@ -98,7 +96,6 @@ def score_single_call(
 
 
 def _is_rate_limited(status: str) -> bool:
-    """True when a judge attempt failed with an HTTP 429 / rate_limited error."""
     lowered = status.lower()
     return "429" in status or "rate_limited" in lowered
 
@@ -110,13 +107,10 @@ def score_task(
     max_retries: int = 3,
     sleep_between: float = 1.0,
 ) -> tuple[list[float], float, float, bool, str]:
-    """Score all deferred calls for one task.
+    """Score every deferred judge call for one task.
 
-    ``sleep_between`` is the minimum seconds between API attempts (after every
-    attempt, success or failure). Retries after a 429 wait at least
-    ``RATE_LIMIT_RETRY_SLEEP`` seconds so they do not thrash the minute window.
-
-    Returns ``(verdicts, judge_product, final_reward, final_success, status)``.
+    sleep_between is the gap after every API attempt. A 429 waits at least
+    RATE_LIMIT_RETRY_SLEEP seconds so retries do not burn the minute window.
     """
     verdicts: list[float] = []
     worst_status = "scored"

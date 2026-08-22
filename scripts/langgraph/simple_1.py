@@ -1,3 +1,9 @@
+"""Two-node LangGraph that appends a line at each hop.
+
+Writes graph.png and opens it in Preview. Checking that START -> node
+-> END actually compiles before wiring this to Playwright.
+"""
+
 import subprocess
 from typing import TypedDict
 

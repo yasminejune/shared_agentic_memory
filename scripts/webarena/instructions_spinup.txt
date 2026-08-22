@@ -81,7 +81,7 @@ rows whose reward is provisional.
 Step C — score the deferred judge calls with Mistral:
 
   python scripts/webarena/score_deferred_judge.py \
-    --calls data/webarena/trajectories_1_judge_calls.jsonl
+    --calls data/webarena/trajectories_A_no_memories_judge_calls.jsonl
 
 The scorer is resumable: re-running retries failed/unparseable tasks
 and skips already-scored ones. Output: <stem>_judge_scores.csv with

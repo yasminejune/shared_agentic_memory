@@ -1,21 +1,7 @@
-"""Deferred WebArena LLM judge — capture inputs, score offline.
+"""Stub the WebArena LLM judge during a run and record its inputs.
 
-Patches ``webarena.evaluation_harness.evaluators.llm_fuzzy_match`` and
-``.llm_ua_match`` with stubs that return ``1.0`` and record the exact
-``(pred, reference, intent)`` triple the harness passed. The live
-reward is therefore the deterministic factor only; the real judge
-verdict is computed in a separate offline pass via
-``scripts/webarena/score_deferred_judge.py``.
-
-The stubs patch the ``evaluators`` module attributes (not
-``helper_functions``), because ``evaluators.py`` does
-``from .helper_functions import llm_fuzzy_match, llm_ua_match``
-at import time, binding those names in its own namespace.
-
-Call :func:`install` after :func:`prepare_webarena` — importing the
-harness triggers ``webarena/browser_env/env_config.py``'s assertion
-that requires the bare ``SHOPPING``/``REDDIT``/… env vars, which only
-exist after ``WebArenaInstance.__init__`` copies them from ``WA_*``.
+fuzzy_match and ua_match return 1.0 so the harness product is not lost.
+The real (pred, reference, intent) triples are written out and scored later.
 """
 
 from __future__ import annotations
@@ -51,7 +37,7 @@ def _stub_ua_match(pred: str, reference: str, question: str) -> float:
 
 
 def install() -> None:
-    """Patch the evaluators module to defer LLM judge calls. Idempotent."""
+    """Patch evaluators.llm_fuzzy_match / llm_ua_match. Call after prepare_webarena."""
     global _installed
     if _installed:
         return
@@ -63,10 +49,10 @@ def install() -> None:
 
 
 def reset() -> None:
-    """Clear the call buffer (call before each ``env.step``)."""
+    """Clear the call buffer. Call before each env.step."""
     _buffer.clear()
 
 
 def calls() -> list[dict[str, Any]]:
-    """Return a copy of the recorded judge calls since last :func:`reset`."""
+    """Copy of recorded (pred, reference, intent) triples since the last reset."""
     return list(_buffer)

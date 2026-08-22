@@ -1,4 +1,4 @@
-"""Unit tests for ``agent_memories.config.reproducibility``."""
+"""Tests for agent_memories.config.reproducibility."""
 
 from __future__ import annotations
 

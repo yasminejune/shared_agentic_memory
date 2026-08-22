@@ -1,4 +1,4 @@
-"""Unit tests for BrowserGym WebArena action parsing."""
+"""Tests for BrowserGym WebArena action parsing."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Project-wide configuration constants and helpers."""
+"""Repo paths, default user id, and the random-seed helpers."""
 
 from .defaults import (
     DEFAULT_MEMORY_DIR,

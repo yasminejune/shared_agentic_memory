@@ -1,31 +1,16 @@
-"""Standalone smoke for the WP2 X-gating + carry-over buffer.
+"""Smoke X-gating and the carry-over buffer, no LLM.
 
-No LLM and no embedder are involved here -- the gating policy is
-pure logic over batch-index lists, and the persistence layer is
-versioned JSONL round-tripping of entry-level records. This is the
-Phase 1.3 exerciser of :func:`agent_memories.generalisation.select_round2_inputs`
-and the :func:`write_buffer` / :func:`read_buffer` pair, before the
-WP2 orchestrator wires them in.
+select_round2_inputs is index lists; write_buffer / read_buffer
+is versioned JSONL. Three checks:
 
-The script runs three things and prints the result of each:
+1. A small (bucket_sizes, X) grid so the policy is visible:
+   full buckets go to round 2, the rest are set aside.
+2. Round-trip a synthetic carry-over list through a temp file
+   under data/memories/.shared_buffer_test.jsonl.
+3. Fake assignments + fake entries, resolve carry_over indices
+   back to MemoryEntry objects, persist, reload.
 
-1. A small grid of ``(bucket_sizes, X)`` cases through
-   :func:`select_round2_inputs` so the gating policy ("pass every
-   entry from a triggered label to round 2; set aside every bucket
-   that did not hit ``X``") is visible at a glance.
-2. A round-trip of a synthetic carry-over list through
-   :func:`write_buffer` / :func:`read_buffer` against a temp path
-   under ``data/memories/.shared_buffer_test.jsonl``, checking that
-   the loaded entries equal the input on every field.
-3. The orchestrator's end-of-trigger glue: given fake assignments
-   and a fake list of memory entries, resolve the
-   :attr:`GatingResult.carry_over` indices back to
-   :class:`MemoryEntry` objects, persist them, reload them, and
-   print the resulting list.
-
-The temp persistence file is removed at the end of the script so
-repeated runs stay deterministic. Pass ``--keep`` to leave it in
-place for manual inspection.
+Temp file is deleted unless --keep.
 """
 
 from __future__ import annotations
@@ -47,13 +32,12 @@ DEFAULT_BUFFER_PATH = DEFAULT_MEMORY_DIR / ".shared_buffer_test.jsonl"
 
 
 def _fake_entry(user_id: str, query: str, *, dim: int = 4) -> MemoryEntry:
-    """Construct a deterministic entry-level record for buffer tests.
+    """Deterministic MemoryEntry for buffer tests.
 
-    The embedding is a tiny ``dim``-vector seeded by ``hash(query)``
-    so the JSONL serialiser has something to write but the test
-    does not depend on a real :class:`Embedder`. The entry carries
-    plausible-looking title / description / content strings so a
-    visual inspection of the persisted JSONL reads naturally.
+    Tiny embedding seeded by hash(query) so the JSONL serialiser has
+    something to write without standing up an Embedder. Title /
+    description / content are dummy strings so the persisted file
+    still reads like a memory if you open it.
     """
     seed = abs(hash(query)) % 997
     embedding = [float((seed + i) % 13) / 13.0 for i in range(dim)]
@@ -74,7 +58,7 @@ def _fake_entry(user_id: str, query: str, *, dim: int = 4) -> MemoryEntry:
 
 
 def _format_gating(result: GatingResult) -> str:
-    """One-line dump of label_inputs and carry_over for the gating grid."""
+    """One-line dump of label_inputs and carry_over."""
     parts: list[str] = []
     for label_idx, inputs in enumerate(result.label_inputs):
         if inputs is None:
@@ -87,7 +71,7 @@ def _format_gating(result: GatingResult) -> str:
 
 
 def _run_gating_grid() -> None:
-    """Print the gating policy on a handful of representative cases."""
+    """Print the gating policy on a handful of cases."""
     print("=" * 72)
     print("X-gating policy on a representative grid:")
     print("=" * 72)
@@ -106,7 +90,7 @@ def _run_gating_grid() -> None:
 
 
 def _run_roundtrip(path: Path) -> bool:
-    """Persist a synthetic carry-over and reload it; return ``True`` on equality."""
+    """Write a synthetic carry-over list, reload it, check equality."""
     print("=" * 72)
     print(f"Persistence round-trip via {path}:")
     print("=" * 72)
@@ -132,7 +116,7 @@ def _run_roundtrip(path: Path) -> bool:
 
 
 def _run_orchestrator_glue(path: Path) -> None:
-    """Simulate the orchestrator's end-of-trigger carry-over flow."""
+    """End-of-trigger glue: gating -> carry_over indices -> persist."""
     print()
     print("=" * 72)
     print("End-of-trigger orchestrator glue (gating -> carry_over -> persist):")

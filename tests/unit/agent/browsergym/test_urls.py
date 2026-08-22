@@ -1,4 +1,4 @@
-"""Unit tests for sandboxed WebArena URL resolution."""
+"""Tests for sandboxed WebArena URL resolution."""
 
 from __future__ import annotations
 

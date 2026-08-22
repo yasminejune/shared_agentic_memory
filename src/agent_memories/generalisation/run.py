@@ -1,7 +1,7 @@
-"""InvisibleInk shared-memory pipeline: run Steps 1–4 in order.
+"""InvisibleInk shared-memory pipeline: run Steps 1-4 in order.
 
-Counterpart to Amin ``scripts/memories/WP2_pipeline.py``. Each step is
-still independently runnable via ``python -m agent_memories.generalisation.stepN_*``.
+Counterpart to Amin scripts/memories/WP2_pipeline.py. Each step is still
+independently runnable via python -m agent_memories.generalisation.stepN_*.
 """
 
 from __future__ import annotations

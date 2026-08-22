@@ -1,9 +1,7 @@
-"""Delete every per-user JSONL file under ``data/memories/``.
+"""Wipe every per-user JSONL under data/memories/.
 
-A scratch-reset helper for the WP1.5 memory store. The runner
-(``scripts/memories/WP1_5.py``) will recreate the file on its next
-run, so wiping the directory is enough -- there is no schema or
-index to keep in sync.
+Scratch reset. WP1_5.py recreates the file on the next run; there is
+no index or schema to keep in sync.
 
 Usage:
     python scripts/memories/clear_memories.py

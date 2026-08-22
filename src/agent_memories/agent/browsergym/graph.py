@@ -1,4 +1,4 @@
-"""Compile the BrowserGym Observe -> Think -> Act loop."""
+"""Observe -> Think -> Act loop on a BrowserGym WebArena env."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ def build_graph(
     *,
     max_steps: int = DEFAULT_MAX_STEPS,
 ) -> Any:
-    """Return a compiled LangGraph app bound to a :class:`WebArenaEnvWrapper`."""
+    """Compile Observe -> Think -> Act. Think routes to act, observe, or END."""
 
     def route_from_think(state: AgentState) -> str:
         if state["done"]:

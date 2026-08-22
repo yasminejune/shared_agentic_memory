@@ -1,4 +1,4 @@
-"""Counts the number of task instantiations from the task descriptions JSON."""
+"""Count how many WebArena tasks share each intent_template_id."""
 
 import json
 
@@ -6,7 +6,7 @@ import pandas as pd
 
 
 def count_instantiations(data: list[dict[str, str]]) -> dict[str, int]:
-    """Return a mapping of intent_template_id to its instantiation count."""
+    """How many tasks share each intent_template_id."""
     counts: dict[str, int] = {}
     for entry in data:
         template_id = entry["intent_template_id"]
@@ -15,7 +15,6 @@ def count_instantiations(data: list[dict[str, str]]) -> dict[str, int]:
 
 
 def save_to_csv(counts: dict[str, int], path: str) -> None:
-    """Save the instantiation counts to a CSV file at the given path."""
     csv = pd.Series(counts).reset_index()
     csv.columns = pd.Index(["intent_template_id", "num_instantiations"])
     csv.to_csv(path, index=False)

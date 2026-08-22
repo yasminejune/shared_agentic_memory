@@ -1,4 +1,4 @@
-"""BrowserGym-backed Observe-Think-Act agent (WP3)."""
+"""Observe-Think-Act agent on BrowserGym WebArena."""
 
 from .graph import DEFAULT_MAX_STEPS, build_graph
 

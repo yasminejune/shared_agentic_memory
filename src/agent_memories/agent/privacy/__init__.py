@@ -1,11 +1,4 @@
-"""Amin et al. (2024) private prediction mechanism (WP2.3).
-
-Verbatim implementation of Algorithm 1 from
-`Amin et al. 2024 <https://arxiv.org/abs/2407.12108>`_, the
-zCDP-based privacy accountant that derives the per-batch ``(epsilon,
-delta)`` from the hyperparameters, and the Gemma 2 2B IT wrapper
-that exposes per-position token logits.
-"""
+"""Amin et al. (2024) sampler, Gemma 2 2B IT wrapper, zCDP accountant, and shared prompts."""
 
 from .privacy_accounting import (
     DeltaCheck,

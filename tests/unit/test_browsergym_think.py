@@ -1,4 +1,4 @@
-"""Unit tests for the BrowserGym Think node."""
+"""Tests for the BrowserGym Think node."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Observation preprocessing for the BrowserGym agent backend."""
+"""Flatten BrowserGym axtree objects into tree_yaml for Think."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from browsergym.utils.obs import flatten_axtree_to_str
 
 
 def preprocess_obs(obs: dict[str, Any]) -> dict[str, Any]:
-    """Flatten the accessibility tree into ``tree_yaml`` for Think prompts."""
+    """Copy obs and set tree_yaml from the accessibility tree (empty if missing)."""
     processed = dict(obs)
     axtree_object = processed.get("axtree_object")
     if axtree_object is not None:

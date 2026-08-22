@@ -1,22 +1,9 @@
-"""WP2 round-2 batch assignment: per-entry nearest-label by cosine.
+"""Step 2 assignment: nearest label by cosine of label vs query embeddings.
 
-After WP2-plan §3.2 round 1 emits a list of DP-released label strings,
-the orchestrator embeds each label and assigns every round-2-candidate
-trajectory entry to its nearest label. The DP guarantee for round-2
-batch assignment rests on Assumption 1 — the assignment must depend
-only on the prompt itself plus public information, never on other
-memories in the batch (WP2-plan §4.3 / WP2.5 resolution). Cosine
-similarity between a memory's own ``query`` embedding and the public
-label embeddings satisfies that constraint by construction: the labels
-are post-processed DP artifacts (public) and each memory's embedding
-is a property of that memory alone.
-
-The :class:`~agent_memories.memory.MemoryStore` already embeds every
-entry's ``query`` field via the same
-:class:`~agent_memories.memory.Embedder` (WP1.6 schema, see
-``MemoryStore.add_entry``), so this module reuses the stored
-``entry.embedding`` directly and only spends model time on the ``K``
-label embeddings, not the ``N`` entry embeddings.
+Each private entry is assigned to one label. Per Amin Assumption 1 the
+assignment depends only on the entry itself (its query embedding) and
+the public labels, never on other memories in the batch. A label
+proceeds to Step 3 once enough entries sit in it.
 """
 
 from __future__ import annotations
@@ -30,16 +17,10 @@ from agent_memories.memory import Embedder, MemoryEntry
 
 @dataclass(frozen=True)
 class LabelAssignment:
-    """Result of :func:`assign_memories_to_labels` for one memory entry.
+    """Nearest-label result for one memory entry.
 
-    ``item_index`` is the position of the entry in the input list
-    (so the caller can rebuild a parallel structure without relying
-    on object identity); ``label_index`` is the chosen ``argmax``
-    over the ``K`` labels; ``similarity`` is the matching cosine
-    similarity in ``[-1, 1]`` for downstream diagnostics or
-    threshold-based filtering. The label string itself is not
-    embedded in this record because the orchestrator already holds
-    the ``labels`` list and can look it up by index.
+    item_index is the position in the input list; label_index is the
+    argmax over the labels; similarity is the matching cosine in [-1, 1].
     """
 
     item_index: int
@@ -53,19 +34,10 @@ def assign_memories_to_labels(
     *,
     embedder: Embedder,
 ) -> list[LabelAssignment]:
-    """Assign each entry-level protected example to its nearest label.
+    """Assign each entry to its nearest label by cosine similarity.
 
-    The label strings are embedded with ``embedder.embed_batch`` (one
-    forward pass over all ``K`` labels). Each memory's stored
-    ``entry.embedding`` is used as-is — it was computed at write time
-    over the parent trajectory's ``query`` field via the same embedder
-    model (``all-MiniLM-L6-v2`` by default), so the cosine similarities
-    are comparable without re-embedding. Memories whose ``embedding``
-    is ``None`` raise ``ValueError`` because the WP1.6 store only writes
-    entries that have been embedded at add time.
-    Returns one :class:`LabelAssignment` per input memory in input
-    order. The caller can group by ``label_index`` to build per-label
-    buckets for the X-gating step.
+    Labels are embedded in one batch. Each memory uses its stored query
+    embedding. Entries with no embedding raise ValueError.
     """
     if not labels:
         raise ValueError("`labels` must contain at least one label.")
@@ -102,15 +74,10 @@ def group_by_label(
     assignments: list[LabelAssignment],
     n_labels: int,
 ) -> list[list[int]]:
-    """Bucket ``LabelAssignment`` indices by their ``label_index``.
+    """Bucket assignment indices by label_index.
 
-    Returns ``n_labels`` lists, each holding the ``item_index`` of
-    every entry assigned to that label, in the order the entries
-    appeared in the original input. Empty buckets are returned for
-    labels that received no memories so the caller can iterate over
-    a fixed ``range(n_labels)`` rather than handling missing keys.
-    The fixed ``range(n_labels)`` shape is also what the X-gating
-    step expects ("for each label, is the bucket size ≥ X?").
+    Returns n_labels lists of item_index values, including empty buckets
+    so the caller can ask whether each label has enough entries for Step 3.
     """
     buckets: list[list[int]] = [[] for _ in range(n_labels)]
     for assignment in assignments:

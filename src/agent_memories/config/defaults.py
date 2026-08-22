@@ -1,17 +1,7 @@
-"""Project-wide defaults for any memory-touching code.
+"""Repo root, default memory directory, and default user id.
 
-Centralising these here keeps the WP1.5+ runner, the WP1.6 ReasoningBank
-script (future), and the WP2 shared-store glue from each redefining the
-same constants. Tests that need a different value should construct
-:class:`agent_memories.memory.MemoryStore` directly with an explicit
-``path`` and ``user_id`` rather than monkey-patching this module.
-
-The single env-var hook (``AGENT_MEMORY_USER_ID``) lets a developer flip
-to a different default without code edits -- useful on shared dev
-machines -- but the *project* default is the literal ``"user_a"``. The
-OS user is intentionally *not* consulted: the user-id semantics in this
-project refer to simulated users for the WP2 privacy proof, not to
-whoever happens to be logged in.
+AGENT_MEMORY_USER_ID overrides the default user_a. The OS login is
+not used: user ids here are simulated users, not whoever is logged in.
 """
 
 from __future__ import annotations

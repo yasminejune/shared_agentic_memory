@@ -1,25 +1,17 @@
-"""Runnable entry point for the WP1.6 memory-augmented Observe-Think-Act loop.
+"""Private ReasoningBank loop: Observe-Think-Act plus memory write.
 
-Mirrors ``scripts/langgraph/WP1_3.py`` exactly except for three additions:
+Same driver as scripts/langgraph/WP1_3.py, with three extras:
 
-1. **Per-user memory store on disk.** A JSONL file at
-   ``data/memories/<user_id>.jsonl`` is loaded (or created lazily) on
-   startup, in the WP1.6 ReasoningBank schema (one entry per task
-   query, items hanging off).
-2. **Memory injection.** The top-``k`` entries most similar to the aim
-   are read into ``state['memories']`` (flattened to one
-   ``{"title", "content"}`` dict per item) before ``graph.invoke``.
-   On a fresh store this is the empty list; the agent runs without
-   memories until it has accumulated some of its own.
-3. **WP1.6 ReasoningBank memory creation.** After the loop completes,
-   :class:`MemoryPipeline` runs the LLM-as-Judge + outcome-routed
-   distillation pipeline. The final observation's ARIA YAML is passed
-   in as the ``final_state`` argument so the judge prompt sees the
-   page the agent left behind.
+1. Per-user JSONL at data/memories/<user_id>.jsonl, loaded or created
+   on startup.
+2. Top-k memories for the aim go into state['memories'] before
+   graph.invoke. Empty store means the agent runs without them.
+3. After the loop, MemoryPipeline judges the trajectory and distils
+   a private memory. The last observation's ARIA YAML is passed as
+   final_state so the judge sees the page the agent left on.
 
-The script returns the final :class:`AgentState` so a higher-level
-WP2 driver can consume ``state['history']`` and the updated store
-directly.
+Returns the final AgentState so a caller can read history and the
+updated store without scraping stdout.
 """
 
 from __future__ import annotations
@@ -60,12 +52,11 @@ def _build_client(name: str, seed: int) -> ChatClient:
 
 
 def _flatten_entries_for_think(entries: list[MemoryEntry]) -> list[dict[str, str]]:
-    """Render retrieved entries as the flat ``{title, content}`` list Think expects.
+    """Flatten retrieved entries to the ``{title, content}`` list Think expects.
 
-    With the default ``k=1`` this yields 1-3 items (one trajectory's
-    worth of distilled lessons). The ``description`` field is dropped
-    because the paper renders items in the agent prompt with title
-    and content only (Appendix A.2).
+    Default ``k=1`` is one trajectory's worth of lessons (usually 1-3
+    items). Description is dropped: ReasoningBank's agent prompt only
+    uses title and content (Appendix A.2).
     """
     flat: list[dict[str, str]] = []
     for entry in entries:
@@ -75,10 +66,10 @@ def _flatten_entries_for_think(entries: list[MemoryEntry]) -> list[dict[str, str
 
 
 def _truncate_observation(tree_yaml: str, budget: int) -> str:
-    """Cap ``tree_yaml`` to ``budget`` characters with a visible marker.
+    """Cap tree_yaml to ``budget`` characters, with a visible cut marker.
 
-    Mirrors ``nodes._truncate_observation`` so the judge prompt sees
-    the same shape of final state that Think saw during the run.
+    Same shape as ``nodes._truncate_observation``, so the judge sees
+    what Think saw, not the full ARIA dump.
     """
     if budget <= 0 or len(tree_yaml) <= budget:
         return tree_yaml
@@ -88,7 +79,7 @@ def _truncate_observation(tree_yaml: str, budget: int) -> str:
 
 
 def main(argv: list[str] | None = None) -> AgentState:
-    """Drive one memory-augmented TAO session and return the final state."""
+    """Run one memory-augmented TAO session; return the final state."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--model", choices=("qwen", "mistral"), default="qwen")
     parser.add_argument("--url", default=DEFAULT_WEBSITE)

@@ -1,20 +1,10 @@
-"""Privacy accounting for InvisibleInk (Vinod et al., arXiv:2507.02974).
+"""InvisibleInk wrappers around invink.utils.
 
-Thin typed adapters over ``invink.utils`` that fix the authors' inconsistent
-``batch_size`` convention at a single boundary. Every public function in this
-module takes the paper's ``B`` (number of private references) and translates
-internally:
-
-* :func:`invink.utils.get_clip` / :func:`invink.utils.get_epsilon` expect
-  ``batch_size = B + 1`` (LLM inferences per generated token, including the
-  public prompt) and subtract one before composing with Theorem 2.
-* :func:`invink.utils.compute_rho` expects ``batch_size = B`` (private
-  references only).
-
-Passing paper ``B`` through both without this translation understates
-``ρ_seq`` by ``((B+1)/B)²`` at the clip / epsilon call sites. The asymmetry
-looks like a bug when reading the call sites; it is deliberate and matches
-the ``invink`` docstrings.
+``get_clip`` and ``get_epsilon`` take ``B+1`` (inferences per token,
+including the public prompt). ``compute_rho`` takes ``B``, the
+private-reference count. Passing paper ``B`` to both without that
+translation understates ``rho_seq`` by ``((B+1)/B)**2`` at the clip
+and epsilon call sites.
 """
 
 from __future__ import annotations
@@ -28,11 +18,9 @@ from invink.utils import cdp_eps, cdp_rho, compute_rho, get_clip, get_epsilon
 class InvisibleInkAccount:
     """Result of one run of InvisibleInk Algorithm 1.
 
-    Pure-data record. Unlike Amin's :class:`PrivacyAccount` there is no SVT
-    branch, so every generated token spends budget and there is no
-    ``public_tokens_used`` / ``sigma`` / ``r`` field. ``t`` is the a-priori
-    token budget used to calibrate ``c``; ``tokens_used`` is the realised
-    length (may be lower if the model emitted a stop token early).
+    No SVT branch: every generated token spends budget. ``t`` is the
+    a-priori token budget used to calibrate ``c``; ``tokens_used`` is
+    the realised length (may be lower if a stop token arrived early).
     """
 
     epsilon: float
@@ -56,10 +44,7 @@ def clip_for_budget(
     b: int,
     tau: float,
 ) -> float:
-    """Calibrate clip norm ``C`` for a target ``(ε, δ)`` budget (Theorem 2).
-
-    Translates paper ``b`` into invink's ``batch_size = b + 1`` convention.
-    """
+    """Calibrate clip norm ``C`` for a target ``(epsilon, delta)`` budget (Theorem 2)."""
     return float(
         get_clip(
             epsilon=target_epsilon,
@@ -78,10 +63,7 @@ def epsilon_for_tokens(
     tau: float,
     delta: float,
 ) -> float:
-    """Realised ``(ε, δ)``-DP epsilon after ``num_tokens`` private tokens.
-
-    Translates paper ``b`` into invink's ``batch_size = b + 1`` convention.
-    """
+    """Realised ``(epsilon, delta)``-DP epsilon after ``num_tokens`` private tokens."""
     if num_tokens <= 0:
         return 0.0
     return float(
@@ -96,10 +78,10 @@ def epsilon_for_tokens(
 
 
 def rho_for_tokens(num_tokens: int, c: float, b: int, tau: float) -> float:
-    """zCDP cost ``ρ_seq = T · (C / (B τ))² / 2`` (Theorem 2).
+    """zCDP cost ``rho_seq = T * (C / (B * tau))**2 / 2`` (Theorem 2).
 
-    Passes paper ``b`` directly: :func:`invink.utils.compute_rho` already
-    treats ``batch_size`` as the private-reference count ``B``.
+    Passes paper ``b`` directly: ``compute_rho`` treats ``batch_size`` as
+    the private-reference count ``B``.
     """
     if num_tokens <= 0:
         return 0.0
@@ -107,14 +89,14 @@ def rho_for_tokens(num_tokens: int, c: float, b: int, tau: float) -> float:
 
 
 def epsilon_from_rho(rho: float, delta: float) -> float:
-    """Tight zCDP → ``(ε, δ)``-DP conversion (invink ``cdp_eps``)."""
+    """Tight zCDP to ``(epsilon, delta)``-DP conversion (invink ``cdp_eps``)."""
     if rho <= 0.0:
         return 0.0
     return float(cdp_eps(rho, delta))
 
 
 def rho_from_epsilon(epsilon: float, delta: float) -> float:
-    """Tight ``(ε, δ)``-DP → zCDP conversion (invink ``cdp_rho``)."""
+    """Tight ``(epsilon, delta)``-DP to zCDP conversion (invink ``cdp_rho``)."""
     if epsilon <= 0.0:
         return 0.0
     return float(cdp_rho(epsilon, delta))

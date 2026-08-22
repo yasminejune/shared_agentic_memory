@@ -1,4 +1,4 @@
-"""Adapter-contract tests for InvisibleInk DClip and Top-k+ primitives."""
+"""Tests for InvisibleInk DClip and Top-k+ primitives."""
 
 from __future__ import annotations
 
@@ -15,7 +15,6 @@ pytestmark = pytest.mark.unit
 
 
 def test_dclip_mean_bounds_each_coordinate_within_c() -> None:
-    """Every coordinate of the mean lies within C of z_public."""
     torch.manual_seed(0)
     b, vocab, c = 4, 32, 1.5
     z_public = torch.randn(vocab, dtype=torch.float32)
@@ -29,7 +28,6 @@ def test_dclip_mean_bounds_each_coordinate_within_c() -> None:
 
 
 def test_dclip_mean_is_identity_when_private_equals_public() -> None:
-    """When every private row equals the public logits, DClip is a no-op."""
     z_public = torch.arange(16, dtype=torch.float32)
     z_private = z_public.unsqueeze(0).expand(3, -1).contiguous()
     phi_bar = dclip_mean(z_private, z_public, c=2.0)
@@ -37,7 +35,6 @@ def test_dclip_mean_is_identity_when_private_equals_public() -> None:
 
 
 def test_top_k_plus_mask_selects_at_least_k() -> None:
-    """Top-k+ support always contains at least the public top-k."""
     torch.manual_seed(1)
     vocab, k, c, b = 64, 8, 1.0, 10
     z_public = torch.randn(vocab, dtype=torch.float32)
@@ -49,7 +46,6 @@ def test_top_k_plus_mask_selects_at_least_k() -> None:
 
 
 def test_top_k_plus_width_shrinks_as_c_over_b_shrinks() -> None:
-    """Smaller C/B yields a narrower (or equal) Top-k+ support."""
     torch.manual_seed(2)
     z_public = torch.randn(128, dtype=torch.float32)
     wide, _ = top_k_plus_mask(z_public, k=10, c=5.0, b=5)
@@ -58,7 +54,6 @@ def test_top_k_plus_width_shrinks_as_c_over_b_shrinks() -> None:
 
 
 def test_sample_topk_plus_only_returns_masked_token() -> None:
-    """Sampled token always lies inside the Top-k+ support."""
     torch.manual_seed(3)
     vocab = 20
     phi_bar = torch.randn(vocab, dtype=torch.float32)
@@ -71,7 +66,6 @@ def test_sample_topk_plus_only_returns_masked_token() -> None:
 
 
 def test_top_k_plus_mask_full_vocab_when_k_covers_all() -> None:
-    """k == vocab yields a full-ones mask and an empty expansion band."""
     z_public = torch.linspace(-1.0, 1.0, 16)
     mask, expansion_idxs = top_k_plus_mask(z_public, k=16, c=1.0, b=4)
     assert bool(mask.all().item())

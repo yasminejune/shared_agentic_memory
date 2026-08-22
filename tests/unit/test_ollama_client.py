@@ -1,12 +1,4 @@
-"""Unit tests for ``OllamaClient``.
-
-The HTTP layer is the seam: we swap the client's ``_http`` for an
-``httpx.Client`` backed by ``httpx.MockTransport`` so the tests cover
-the request payload, the success path, and the error paths without
-needing a live Ollama server. The structure mirrors
-``tests/unit/test_mistral_client.py`` so the two clients' failure
-behaviour stays observably similar.
-"""
+"""Tests for OllamaClient using httpx.MockTransport."""
 
 from __future__ import annotations
 
@@ -109,7 +101,6 @@ def test_chat_returns_empty_string_when_content_missing() -> None:
 
 @pytest.mark.unit
 def test_chat_propagates_http_404_without_retry() -> None:
-    """A missing Ollama model returns 404; the Think node must see it."""
     attempts = {"n": 0}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -165,7 +156,6 @@ def test_num_predict_is_configurable() -> None:
 
 @pytest.mark.unit
 def test_chat_max_tokens_kwarg_overrides_constructor_default() -> None:
-    """The WP1.6 pipeline raises ``max_tokens`` per call; the constructor cap stays at 64."""
     captured: dict[str, Any] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -184,7 +174,6 @@ def test_chat_max_tokens_kwarg_overrides_constructor_default() -> None:
 
 @pytest.mark.unit
 def test_chat_max_tokens_none_falls_back_to_constructor_default() -> None:
-    """Omitting ``max_tokens`` must use the constructor's ``num_predict`` (Think default)."""
     captured: dict[str, Any] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:

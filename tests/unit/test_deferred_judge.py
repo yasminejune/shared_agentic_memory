@@ -1,4 +1,4 @@
-"""Unit tests for the deferred WebArena LLM judge infrastructure."""
+"""Tests for the deferred WebArena LLM judge."""
 
 from __future__ import annotations
 
@@ -27,7 +27,6 @@ from common import (  # noqa: E402
 
 @pytest.fixture(autouse=True)
 def _reset_shim():
-    """Ensure a clean shim state for each test."""
     deferred_judge.reset()
     yield
     deferred_judge.reset()
@@ -99,11 +98,6 @@ def test_install_is_idempotent() -> None:
             assert fake_evaluators.llm_fuzzy_match is deferred_judge._stub_fuzzy_match
     finally:
         deferred_judge._installed = saved
-
-
-# ---------------------------------------------------------------------------
-# 2. Scoring arithmetic tests
-# ---------------------------------------------------------------------------
 
 
 class _FakeJudgeClient:
@@ -253,11 +247,6 @@ def test_score_task_rate_limit_retry_uses_sixty_second_floor() -> None:
     assert sleep_mock.call_args_list[1].args[0] == 1.0
 
 
-# ---------------------------------------------------------------------------
-# 3. common.py header guard test
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.unit
 def test_ensure_csv_header_rejects_mismatched_header(tmp_path: Path) -> None:
     csv_path = tmp_path / "test.csv"
@@ -289,11 +278,6 @@ def test_ensure_csv_header_creates_new_file(tmp_path: Path) -> None:
         reader = csv.reader(fh)
         header = next(reader)
     assert header == columns
-
-
-# ---------------------------------------------------------------------------
-# 4. JSONL writer test
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.unit

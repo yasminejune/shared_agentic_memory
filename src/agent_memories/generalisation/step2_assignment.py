@@ -1,8 +1,9 @@
-"""Step 2: cosine assignment of tasks to DP labels, gated at B=7.
+"""Step 2: assign each private entry to one DP label by cosine similarity.
 
-Writes ``assignments.json`` (qualifying buckets) and the carry-over
-buffer (labels below the gate). Independently runnable against
-``labels.json`` and the memories CSV.
+Assignment is cosine of embeddings (label vs query). Per Amin Assumption 1
+it depends only on the entry itself. A label proceeds to Step 3 once
+enough entries sit in it. Writes assignments.json and the carry-over
+buffer.
 """
 
 from __future__ import annotations
@@ -57,11 +58,11 @@ def run_assignment(
     x_per_label: int = BUCKET_SIZE,
     carry_over: Sequence[MemoryEntry] = (),
 ) -> dict[str, Any]:
-    """Assign tasks to labels and gate at ``x_per_label``.
+    """Assign tasks to labels and gate at x_per_label.
 
-    Returns the assignments artefact (qualifying buckets carry full
-    entry records for Step 3). Carry-over entry indices are in
-    ``carry_over_indices``; the caller persists those entries.
+    Returns the assignments artefact. Qualifying buckets carry full entry
+    records for Step 3. Carry-over entries are returned for the caller
+    to persist.
     """
     if not labels:
         raise ValueError("Step 2 requires at least one label.")

@@ -1,26 +1,7 @@
-"""Factory functions that produce LangGraph nodes bound to a Playwright page.
+"""LangGraph nodes bound to a Playwright page.
 
-LangGraph nodes have signature ``(state) -> state``, so we cannot pass
-the browser handle as an argument. Instead, each factory closes over
-the ``Page`` (or, for Think, the scripted action list or LLM client)
-and returns the node function. This keeps the browser out of the
-graph's state and out of module-level globals.
-
-In-trajectory working memory is threaded through ``state['history']``.
-Every node that "does something the next Think should know about" --
-parse failure, ``stop``, action dispatch, dispatch exception -- appends
-one record to it. The LLM-driven Think then serialises history into
-its next user prompt, so the agent reasons over its full running trace
-rather than a one-shot error string. Chat-client failures (timeouts,
-404 for a missing model, etc.) are *not* logged to history; they
-propagate so the runner's finally-block closes the browser and the
-user sees a real error instead of 30 iterations of identical 404s.
-
-Each node also emits one human-readable trace line per step
-(``[Observe]: ...``, ``[Think]: ...``, ``[Act]: ...``). Those three
-lines are the entire terminal output of a run; everything richer
-(prompt dumps, file logs, run artefacts) is intentionally absent so
-the next work package can layer on whatever inspection it needs.
+Factories close over the page (or the LLM client) because LangGraph nodes
+only take state. Each step prints one [Observe]/[Think]/[Act] line.
 """
 
 from __future__ import annotations
@@ -38,31 +19,16 @@ from .observation import format_aria_snapshot
 
 NodeFn = Callable[[AgentState], AgentState]
 
-# Cap on how much of the ARIA YAML we paste into a single Think prompt.
-# Real-world pages like amazon.co.uk produce 60k+ token snapshots that
-# blow past an 8B local model's context window (typically 8k-32k); the
-# server then silently truncates the *front* of the prompt, throwing
-# away the system grammar and aim, and the model stalls. 12,000 chars
-# is roughly 3k tokens, which leaves headroom for grammar + running
-# history within a 32k context.
+# 12k chars (~3k tokens). Uncapped ARIA YAML overflows a local 8B
+# context window; the server then truncates the front of the prompt.
 OBSERVATION_CHAR_BUDGET = 12_000
 
-# How many consecutive identical ``thought`` records terminate the loop.
-# Both pathologies we saw in WP1.5 dev runs -- repeated parse failures
-# on a multi-line LLM reply and repeated identical clicks on a page
-# whose state never advances -- manifest as the *same* raw LLM string
-# being appended to history N turns in a row. Aborting after 5 of
-# those frees the runner to fall through to ``MemoryPipeline.create_from_run``
-# so the run still produces a memory rather than spinning out
-# ``max_steps`` worth of identical wasted turns.
+# Abort after 5 identical thoughts in a row (repeated parse failures
+# or the same click on a page that never changes).
 DEFAULT_STUCK_THRESHOLD = 5
 
-# Memory-injection instruction, verbatim from ReasoningBank (Ouyang et al.
-# 2025, Appendix A.2 "Memory Retrieval and Response Generation"). This
-# string is what the paper expects the agent to see whenever
-# ReasoningBank surfaces memories for a task; the description field is
-# intentionally omitted from the rendered block because the paper says
-# items are "represented by their title and content".
+# ReasoningBank (Ouyang et al. 2025, Appendix A.2). Items shown to Think
+# are title and content only.
 MEMORY_INJECTION_INSTRUCTION = (
     "Below are some memory items that I accumulated from past interaction "
     "from the environment that may be helpful to solve the task. You can "
@@ -73,7 +39,6 @@ MEMORY_INJECTION_INSTRUCTION = (
 
 
 def _trace(line: str) -> None:
-    """Print a single trace line to stdout, flushed."""
     print(line, flush=True)
 
 
@@ -98,13 +63,7 @@ THINK_SYSTEM_PROMPT = (
 
 
 def make_observe(page: Page) -> NodeFn:
-    """Read the current page's ARIA snapshot into ``state['observation']``.
-
-    The observation carries page metadata (``url``, ``title``) and the
-    YAML accessibility tree (``tree_yaml``) produced by
-    ``aria_snapshot(mode="ai")``. The YAML embeds ``[ref=eN]`` markers
-    that the LLM-driven Think resolves via ``page.locator("aria-ref=eN")``.
-    """
+    """Write the current URL, title, and ARIA YAML into state['observation']."""
 
     def observe(state: AgentState) -> AgentState:
         observation: dict[str, Any] = {
@@ -119,14 +78,7 @@ def make_observe(page: Page) -> NodeFn:
 
 
 def make_think_scripted(actions: list[dict[str, Any]]) -> NodeFn:
-    """Walk a fixed list of actions; flip ``done`` when exhausted.
-
-    Uses ``state['step']`` as the index into ``actions``. Once the
-    index is past the end of the list, the Think node signals
-    termination by setting ``done=True``. The LLM-driven Think
-    replaces this in WP1.3 with the same ``(state) -> state`` signature
-    so the graph topology stays unchanged.
-    """
+    """Walk a fixed action list. Sets done when the list is exhausted."""
 
     def think(state: AgentState) -> AgentState:
         idx = state["step"]
@@ -147,29 +99,10 @@ def make_think(
     *,
     stuck_threshold: int = DEFAULT_STUCK_THRESHOLD,
 ) -> NodeFn:
-    """Return a Think node that asks ``client`` for one grammar-locked action.
+    """Ask client for one grammar-locked action line.
 
-    The factory closes over the chat client so the LangGraph node keeps
-    the standard ``(state) -> state`` signature. On every step it:
-
-    * assembles a user prompt from the aim, the running history, and
-      the (size-capped) ARIA-tree observation;
-    * short-circuits as ``stuck`` when the tail of ``history`` shows
-      ``stuck_threshold`` consecutive turns with the same ``thought``
-      (no LLM call wasted on that turn);
-    * calls ``client.chat`` once and runs the reply through
-      :func:`parse_action`;
-    * routes the outcome through ``state``: a ``stop`` reply flips
-      ``done`` and is logged in ``history``; a valid action populates
-      ``action`` and lets Act run (Act logs the dispatch outcome); a
-      parse failure clears ``action``, logs the failure to ``history``,
-      and increments ``step`` so the loop cannot spin forever.
-
-    Chat-client errors (HTTP 404 for an unpulled Ollama model, a
-    timeout, an auth failure, a transport hiccup) are *not* caught
-    here: they propagate to the runner, whose ``finally`` block closes
-    the browser. The user then sees one real exception instead of the
-    loop silently spinning for ``max_steps`` iterations.
+    Closes over the chat client. Consecutive identical thoughts abort
+    after stuck_threshold. Chat-client errors propagate to the runner.
     """
 
     def think(state: AgentState) -> AgentState:
@@ -207,14 +140,10 @@ def make_think(
 
 
 def _is_stuck(history: list[dict[str, Any]], threshold: int) -> bool:
-    """Return True when the last ``threshold`` records share one ``thought``.
+    """True when the last threshold history records share one thought.
 
-    The signature is the raw LLM reply: a parse-failure record stores it
-    verbatim, and a successful Act record stores the same string under
-    ``thought`` after Act has dispatched. So a thought-equality check
-    catches both the "LLM keeps emitting an unparseable line" loop and
-    the "LLM keeps emitting the same valid action on an unchanging page"
-    loop without false-positives from dynamic-observation noise.
+    Catches both an unparseable line repeated and the same valid action
+    on an unchanging page.
     """
     if threshold < 2 or len(history) < threshold:
         return False
@@ -226,13 +155,7 @@ def _is_stuck(history: list[dict[str, Any]], threshold: int) -> bool:
 
 
 def _record_stuck_abort(state: AgentState, *, threshold: int) -> AgentState:
-    """Flip ``done`` and append a ``stuck`` record so the run terminates.
-
-    Sets ``done=True`` (graph router sends us straight to END) and stamps
-    the final history record with ``outcome: "stuck: ..."``. That marker
-    is the signal the WP1.5 memory pipeline (and WP1.6 ReasoningBank's
-    success/failure split) reads to know the run was unsuccessful.
-    """
+    """Flip done and append a stuck record so the run terminates."""
     _trace(f"[Think]: (stuck-detector aborted run after {threshold} identical replies)")
     record = {
         "step": state["step"],
@@ -250,14 +173,7 @@ def _record_stuck_abort(state: AgentState, *, threshold: int) -> AgentState:
 
 
 def _record_think_failure(state: AgentState, *, raw: str, outcome: str) -> AgentState:
-    """Log a Think-side parse failure to history and advance ``step``.
-
-    The LLM produced an unparseable line; we keep its raw output in
-    ``thought`` so the next Think turn can see what went wrong, mark
-    ``action`` empty (graph router sends us back to Observe), and
-    increment ``step`` so ``max_steps`` still bounds the loop in the
-    pathological case where the model keeps repeating itself.
-    """
+    """Append a Think parse failure to history and increment step."""
     record = {
         "step": state["step"],
         "thought": raw,
@@ -296,15 +212,7 @@ def _build_user_prompt(state: AgentState) -> str:
 
 
 def _format_memories(memories: list[dict[str, str]]) -> str:
-    """Render retrieved ReasoningBank items as ``Title:``/``Content:`` blocks.
-
-    Matches the paper's "represented by its title and content" rule
-    (Appendix A.2). The runner (:mod:`scripts.memories.WP1_5`) is
-    responsible for flattening :class:`MemoryEntry.items` into this
-    list of ``{"title", "content"}`` dicts before invoking the graph.
-    The ``description`` field is intentionally not shown to the Think
-    LLM -- it is an audit field, not a reasoning aid.
-    """
+    """Render retrieved items as Title:/Content: blocks (ReasoningBank)."""
     rendered: list[str] = []
     for item in memories:
         title = item.get("title", "").strip()
@@ -314,14 +222,10 @@ def _format_memories(memories: list[dict[str, str]]) -> str:
 
 
 def _truncate_observation(tree_yaml: str, budget: int) -> str:
-    """Cap ``tree_yaml`` to ``budget`` characters with a visible marker.
+    """Cap tree_yaml to budget characters, trimming from the end.
 
-    Trims from the *end* of the YAML because the top of an accessibility
-    tree carries the page's landmark structure (header, nav, main), which
-    is what the model needs to navigate; deep descendant lists at the
-    bottom of long pages are the parts that explode token counts on a
-    site like amazon.co.uk. The marker line lets the model know it is
-    looking at a partial view and that scrolling may be needed.
+    The top of the ARIA tree holds landmarks the model needs to navigate.
+    The marker line tells the model the view is partial.
     """
     if budget <= 0 or len(tree_yaml) <= budget:
         return tree_yaml
@@ -343,14 +247,10 @@ def _format_history(history: list[dict[str, Any]]) -> str:
 
 
 def make_act(page: Page) -> NodeFn:
-    """Execute ``state['action']`` on ``page`` and log the outcome.
+    """Dispatch state['action'] on page and append the outcome to history.
 
-    Act no longer decides termination (Think does, via ``done``) and no
-    longer crashes the graph on dispatch errors. Any exception raised
-    by ``dispatch`` is captured into the history record's ``outcome``
-    so the next Think turn can read it and adjust. The step counter is
-    incremented here so successful + failed dispatches both count
-    against ``max_steps``.
+    Dispatch exceptions are recorded, not re-raised. step increments on
+    both success and failure.
     """
 
     def act(state: AgentState) -> AgentState:
@@ -377,12 +277,9 @@ def make_act(page: Page) -> NodeFn:
 
 
 def _render_action(action: dict[str, Any]) -> str:
-    """Render an action dict back to a one-line, grammar-shaped string.
+    """Render an action dict as a one-line grammar-shaped string.
 
-    Used by the ``[Act]:`` trace line. The dict carries enough
-    information for both the WP1.3 ref-based grammar and the WP1.1/1.2
-    selector-based shape, so this function handles both rather than
-    assuming a particular Think factory produced the action.
+    Handles both ARIA-ref and selector-based actions.
     """
     kind = action.get("type", "?")
     target = action.get("ref") or action.get("selector")

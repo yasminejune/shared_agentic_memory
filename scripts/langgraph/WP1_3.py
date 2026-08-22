@@ -1,16 +1,12 @@
-"""Runnable entry point for the WP1.3 + WP1.4 Observe-Think-Act loop.
+"""WP1.3 / WP1.4 Observe-Think-Act on a live Chromium page.
 
-Drives one TAO session against a real Playwright Chromium page. Think
-is LLM-driven (Qwen via local Ollama by default, Mistral via cloud API
-optionally). The loop terminates on the LLM's ``stop`` action or when
-``--max-steps`` is reached, whichever comes first -- WP1.3 covers the
-single-action grammar, WP1.4 covers the multi-step termination, and
-both ship in this one runner.
+Think is an LLM (local Qwen via Ollama, or Mistral on the cloud).
+Stops on the model's ``stop`` action or ``--max-steps``. WP1.3 is the
+single-action grammar; WP1.4 is the multi-step loop. Both live here.
 
-Terminal output is intentionally three trace prefixes only:
-``[Observe]:``, ``[Think]:``, ``[Act]:``. The trajectory itself lives
-in ``state['history']`` and is returned from :func:`main` so the
-WP1.5+ memory pipeline can consume it in-process.
+Stdout is three prefixes only: ``[Observe]:``, ``[Think]:``, ``[Act]:``.
+The trajectory sits in ``state['history']`` and ``main`` returns it so
+a later memory pipeline can consume a finished run in-process.
 """
 
 from __future__ import annotations
@@ -43,13 +39,11 @@ def _build_client(name: str, seed: int) -> ChatClient:
 
 
 def main(argv: list[str] | None = None) -> AgentState:
-    """Drive one Think-Act-Observe session and return the terminal state.
+    """Run one TAO session and return the terminal AgentState.
 
-    Returns the final ``AgentState`` (the same dict ``graph.invoke``
-    returns) so a higher-level memory-extraction pipeline can read
-    ``result['history']`` directly. The browser is always closed via
-    the ``finally`` block, including when a fatal chat exception
-    propagates.
+    Same dict ``graph.invoke`` returns, so a caller can read
+    ``result['history']`` without scraping stdout. The ``finally``
+    closes the browser even if the chat client blows up.
     """
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--model", choices=("qwen", "mistral"), default="qwen")

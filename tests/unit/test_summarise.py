@@ -4,8 +4,6 @@ import pytest
 
 from evaluation.summarise_tasks.summarise import count_instantiations, save_to_csv
 
-# --- count_instantiations ---
-
 
 @pytest.mark.unit
 def test_count_single_entry() -> None:
@@ -32,9 +30,6 @@ def test_count_repeated_ids() -> None:
 @pytest.mark.unit
 def test_count_empty_data() -> None:
     assert count_instantiations([]) == {}
-
-
-# --- save_to_csv ---
 
 
 @pytest.mark.unit

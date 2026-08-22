@@ -1,4 +1,4 @@
-"""BrowserGym-backed WebArena environment wrapper."""
+"""Gym wrapper around BrowserGym WebArena plus our action mapping."""
 
 from __future__ import annotations
 
@@ -31,8 +31,8 @@ from . import deferred_judge
 from .navigation import go_home, goto
 from .observation import preprocess_obs
 
-# Stock webarena subset minus goto / go_forward, plus sandboxed goto and go_home.
-# noop is always allowed by BrowserGym and is included here for the executable mapping.
+# Stock webarena set minus goto/go_forward; our sandboxed goto and go_home instead.
+# noop is always allowed by BrowserGym; listed so it is in the exec mapping.
 _WEBARENA_ACTIONS: list[Callable[..., Any]] = [
     noop,
     scroll,
@@ -60,7 +60,7 @@ WEBARENA_ACTION_SET = HighLevelActionSet(
 
 
 def _build_python_includes() -> str:
-    """Assemble executable action helpers without BrowserGym's broken indent."""
+    """Assemble action source without BrowserGym's broken python_includes indent."""
     parts = [
         "import playwright.sync_api\n",
         "from typing import Literal\n\n\n",
@@ -82,10 +82,9 @@ _PYTHON_INCLUDES = _build_python_includes()
 def webarena_action_to_python(action: str) -> str:
     """Map a high-level action string to executable Python for BrowserGym.
 
-    Reimplements :meth:`HighLevelActionSet.to_python_code` with correctly
-    indented includes. The installed ``browsergym-core`` 0.13.3 wheel embeds
-    leading whitespace in its ``python_includes`` f-strings, which makes
-    ``exec`` raise ``IndentationError`` for every action.
+    Reimplements HighLevelActionSet.to_python_code because browsergym-core
+    0.13.3 leaves leading whitespace in python_includes; exec then raises
+    IndentationError on every action.
     """
     function_calls = highlevel_action_parser.search_string(action)
     function_calls = sum(function_calls.as_list(), [])
@@ -121,7 +120,7 @@ THINK_SYSTEM_PROMPT = build_think_system_prompt(WEBARENA_ACTION_SET)
 
 
 def make_webarena_env(task_id: int, *, headless: bool = True) -> gym.Env:
-    """Create a BrowserGym WebArena environment for ``task_id``."""
+    """Open a BrowserGym WebArena env for one of the 812 tasks."""
     return gym.make(
         f"browsergym/webarena.{task_id}",
         headless=headless,
@@ -131,7 +130,7 @@ def make_webarena_env(task_id: int, *, headless: bool = True) -> gym.Env:
 
 
 class WebArenaEnvWrapper:
-    """Thin holder around a BrowserGym env with preprocessed observations."""
+    """Holds a BrowserGym env and the last preprocessed obs, reward, and judge stubs."""
 
     def __init__(self, env: gym.Env) -> None:
         self.env = env

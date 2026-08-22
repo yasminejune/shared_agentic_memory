@@ -1,17 +1,4 @@
-"""Integration test for the WP1.1 TAO scaffold extended with the WP1.2 loop.
-
-Launches a real Chromium via Playwright, loads the local fixture page
-over ``file://``, runs the loop with a single scripted action and checks
-that:
-
-  * the graph reaches the terminal state in one round (one action -> done);
-  * the stubbed action was carried out (the success div is visible);
-  * the Observe node produced an ARIA-snapshot YAML containing the
-    fixture's button and the ``[ref=eN]`` references WP1.3 will resolve.
-
-Marked ``integration`` because it launches a browser; it is excluded
-from the default unit-test run via ``-m 'not integration'`` if needed.
-"""
+"""Integration test for a single TAO loop step against a local fixture page."""
 
 from __future__ import annotations
 

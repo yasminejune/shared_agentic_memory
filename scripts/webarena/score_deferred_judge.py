@@ -1,16 +1,6 @@
-"""Score deferred WebArena LLM judge calls using Mistral.
+"""Score deferred WebArena LLM-judge calls with Mistral.
 
-Reads the judge-calls JSONL produced by ``run_webarena.py`` (or
-``run_webarena_with_memories.py``), runs each deferred
-``llm_fuzzy_match`` / ``llm_ua_match`` call through the harness's
-own prompts backed by a pinned Mistral model, and writes a
-judge-scores CSV.
-
-Resume: tasks already present in the output CSV with
-``status=scored`` are skipped; ``judge_error`` and ``unparseable``
-rows are retried.
-
-Output: ``<stem>_judge_scores.csv`` alongside the input JSONL.
+Output: <stem>_judge_scores.csv next to the calls JSONL.
 """
 
 from __future__ import annotations

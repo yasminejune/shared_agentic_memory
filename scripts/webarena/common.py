@@ -1,4 +1,4 @@
-"""Shared helpers for WebArena batch scripts."""
+"""Shared helpers for the WebArena batch runners."""
 
 from __future__ import annotations
 
@@ -74,18 +74,17 @@ MEMORY_CSV_COLUMNS = [
     "run_status",
 ]
 
-# Memory-augmented rerun output: the trajectory columns plus two trailing
-# audit columns, so comparison against trajectories_0.csv works unchanged
-# on the shared prefix.
+# Memory-run CSV: trajectory columns plus retrieved_task_ids and
+# retrieved_memory_titles.
 MEMORY_RUN_CSV_COLUMNS = [
     *TRAJECTORY_CSV_COLUMNS,
     "retrieved_task_ids",
     "retrieved_memory_titles",
 ]
 
-DEFAULT_TRAJECTORIES_CSV = REPO_ROOT / "data" / "webarena" / "trajectories_0.csv"
+DEFAULT_TRAJECTORIES_CSV = REPO_ROOT / "data" / "webarena" / "trajectories_A_no_memories.csv"
 DEFAULT_MEMORIES_CSV = REPO_ROOT / "data" / "webarena" / "trajectories_memories.csv"
-DEFAULT_MEMORY_RUN_CSV = REPO_ROOT / "data" / "webarena" / "trajectories_private_memories.csv"
+DEFAULT_MEMORY_RUN_CSV = REPO_ROOT / "data" / "webarena" / "trajectories_B_private_run.csv"
 DEFAULT_INFRA_LOG = REPO_ROOT / "data" / "webarena" / "infra_errors.log"
 DEFAULT_MAX_STEPS = 30
 # Agent Think calls with think=True can run to tens of seconds on a shared
@@ -255,7 +254,7 @@ def prepare_webarena(
     infra_log: Path,
 ) -> None:
     """Single WebArena startup path: status/reset, optional smoke task-0, warm-up."""
-    import browsergym.webarena  # noqa: F401 — registers tasks
+    import browsergym.webarena  # noqa: F401  # registers tasks
     from browsergym.experiments.benchmark.utils import massage_tasks
     from browsergym.webarena.instance import WebArenaInstance
 
@@ -307,14 +306,9 @@ def prepare_webarena(
 
 
 def load_memory_entries_from_csv(csv_path: Path) -> list[tuple[int, MemoryEntry]]:
-    """Load ``(task_id, MemoryEntry)`` pairs from the memories CSV.
+    """Load (task_id, MemoryEntry) pairs from the memories CSV.
 
-    Rows without an extracted memory (``memory_extracted != True``) or
-    without a stored embedding are skipped: they carry no retrievable
-    content. The ``memory`` column is already in the
-    :meth:`MemoryEntry.to_dict_without_embedding` schema, so hydration
-    reuses :meth:`MemoryEntry.from_jsonl_dict` with the embedding
-    re-attached from the ``embedding`` column — no embedder call needed.
+    Skips rows with no extracted memory or no stored embedding.
     """
     from agent_memories.memory import MemoryEntry
 
@@ -375,7 +369,7 @@ def append_judge_calls_record(
 
 
 def state_from_trajectory_row(row: dict[str, str]) -> AgentState:
-    """Rebuild minimal :class:`AgentState` from a trajectories CSV row."""
+    """Rebuild AgentState from a trajectories CSV row."""
     from agent_memories.agent.state import new_state
 
     intent = row.get("intent", "")

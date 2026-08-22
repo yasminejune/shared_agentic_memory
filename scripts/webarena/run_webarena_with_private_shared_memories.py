@@ -1,15 +1,6 @@
-"""WP3.1 — WebArena trajectory batch runner (BrowserGym backend).
+"""Rerun WebArena with top-k private+shared memories in the Think prompt.
 
-Runs the Observe-Think-Act agent against local WebArena tasks and writes
-one CSV row per completed task with the raw trajectory and harness signals.
-
-Memory construction (judge + extractor + embedding) is handled separately
-by ``scripts/webarena/build_memories_from_trajectories.py``.
-
-Resume skips only rows with ``run_status=ok``. Infra failures are logged
-to ``infra_errors.log`` and are not written to the CSV.
-
-Output: ``data/webarena/trajectories.csv`` (gitignored).
+Output: data/webarena/trajectories_D_private_shared.csv
 """
 
 from __future__ import annotations
@@ -23,21 +14,22 @@ _WEBARENA_DIR = Path(__file__).resolve().parent
 if str(_WEBARENA_DIR) not in sys.path:
     sys.path.insert(0, str(_WEBARENA_DIR))
 
+import numpy as np
 from common import (
     DEFAULT_INFRA_LOG,
     DEFAULT_MAX_STEPS,
-    DEFAULT_TRAJECTORIES_CSV,
+    MEMORY_RUN_CSV_COLUMNS,
     QWEN_MODEL,
     RUN_STATUS_AGENT_ERROR,
     RUN_STATUS_OK,
     THINK_REQUEST_TIMEOUT_SECONDS,
-    TRAJECTORY_CSV_COLUMNS,
     append_csv_row,
     append_judge_calls_record,
     ensure_csv_header,
     is_infra_error,
     judge_calls_path,
     load_intent_template_ids,
+    load_memory_entries_from_csv,
     load_ok_task_ids,
     log_infra_error,
     prepare_webarena,
@@ -54,9 +46,21 @@ from agent_memories.agent.browsergym.graph import build_graph
 from agent_memories.agent.browsergym.nodes import extract_bot_response, make_think
 from agent_memories.agent.nodes import OBSERVATION_CHAR_BUDGET
 from agent_memories.agent.state import AgentState, new_state
-from agent_memories.config import load_random_seed, set_global_seed
+from agent_memories.config import DEFAULT_MEMORY_DIR, REPO_ROOT, load_random_seed, set_global_seed
+from agent_memories.memory import Embedder, MemoryEntry, MemoryStore
+from agent_memories.memory.store import _cosine_top_k
 from agent_memories.services.ollama_client import OllamaClient
 from agent_memories.types import ChatClient
+
+DEFAULT_K = 3
+PRIVATE_MEMORIES_CSV = (
+    REPO_ROOT / "data" / "webarena" / "trajectories_reasoningbank_private_memories.csv"
+)
+SHARED_STORE = DEFAULT_MEMORY_DIR / "shared.jsonl"
+DEFAULT_COMBINED_RUN_CSV = REPO_ROOT / "data" / "webarena" / "trajectories_D_private_shared.csv"
+
+# source, originating private task_id (None for shared), entry
+RetrievedRecord = tuple[str, int | None, MemoryEntry]
 
 
 def _build_client(seed: int) -> ChatClient:
@@ -66,6 +70,84 @@ def _build_client(seed: int) -> ChatClient:
         think=True,
         request_timeout=THINK_REQUEST_TIMEOUT_SECONDS,
     )
+
+
+class CombinedMemoryIndex:
+    """Cosine top-k over private CSV entries plus shared JSONL entries."""
+
+    def __init__(
+        self,
+        private_pairs: list[tuple[int, MemoryEntry]],
+        shared_entries: list[MemoryEntry],
+        embedder: Embedder,
+    ) -> None:
+        self._records: list[RetrievedRecord] = [
+            ("private", tid, entry) for tid, entry in private_pairs
+        ]
+        self._records.extend(("shared", None, entry) for entry in shared_entries)
+        self._embedder = embedder
+        self._n_private = len(private_pairs)
+        self._n_shared = len(shared_entries)
+        self._matrix = np.asarray(
+            [entry.embedding for _, _, entry in self._records],
+            dtype=np.float32,
+        )
+
+    def __len__(self) -> int:
+        return len(self._records)
+
+    @property
+    def n_private(self) -> int:
+        return self._n_private
+
+    @property
+    def n_shared(self) -> int:
+        return self._n_shared
+
+    def search(
+        self,
+        intent: str,
+        *,
+        k: int,
+        exclude_task_id: int | None = None,
+    ) -> list[RetrievedRecord]:
+        """Return the global top-k by cosine similarity to intent.
+
+        exclude_task_id drops that task's private memory only.
+        """
+        if not self._records or k <= 0:
+            return []
+        query_vec = np.asarray(self._embedder.embed(intent), dtype=np.float32)
+        fetch = k + 1 if exclude_task_id is not None else k
+        indices = _cosine_top_k(query_vec, self._matrix, fetch)
+        results = [self._records[i] for i in indices]
+        if exclude_task_id is not None:
+            results = [
+                rec
+                for rec in results
+                if not (rec[0] == "private" and rec[1] == exclude_task_id)
+            ]
+        return results[:k]
+
+
+def _flatten_entries_for_think(entries: list[MemoryEntry]) -> list[dict[str, str]]:
+    """Flatten entries to the {title, content} list Think expects."""
+    flat: list[dict[str, str]] = []
+    for entry in entries:
+        for item in entry.items:
+            flat.append({"title": item.title, "content": item.content})
+    return flat
+
+
+def _audit_ids(retrieved: list[RetrievedRecord]) -> list[int | str]:
+    """Private task ids mixed with shared DP labels, in rank order."""
+    ids: list[int | str] = []
+    for source, tid, entry in retrieved:
+        if source == "private" and tid is not None:
+            ids.append(tid)
+        else:
+            ids.append(entry.query)
+    return ids
 
 
 def _write_trajectory_row(
@@ -79,15 +161,21 @@ def _write_trajectory_row(
     final_state_yaml: str,
     bot_response: str,
     run_status: str,
-) -> bool:
-    """Write a trajectory row and its judge sidecar. Returns True if judge is pending."""
+    retrieved: list[RetrievedRecord],
+) -> None:
     harness_reward = wrapper.last_reward
     harness_success = harness_reward > 0
     pending = bool(wrapper.last_judge_calls)
 
+    retrieved_ids = json.dumps(_audit_ids(retrieved))
+    retrieved_titles = json.dumps(
+        [item.title for _, _, entry in retrieved for item in entry.items],
+        ensure_ascii=False,
+    )
+
     append_csv_row(
         csv_path,
-        TRAJECTORY_CSV_COLUMNS,
+        MEMORY_RUN_CSV_COLUMNS,
         {
             "task_id": str(task_id),
             "intent": intent,
@@ -99,6 +187,8 @@ def _write_trajectory_row(
             "harness_success": str(harness_success),
             "run_status": run_status,
             "judge_pending": str(pending),
+            "retrieved_task_ids": retrieved_ids,
+            "retrieved_memory_titles": retrieved_titles,
         },
     )
     if pending:
@@ -110,7 +200,6 @@ def _write_trajectory_row(
             deferred_reward=harness_reward,
             calls=wrapper.last_judge_calls,
         )
-    return pending
 
 
 def _run_task(
@@ -118,6 +207,9 @@ def _run_task(
     task_id: int,
     intent_template_id: int,
     client: ChatClient,
+    index: CombinedMemoryIndex,
+    k: int,
+    exclude_own_memory: bool,
     csv_path: Path,
     infra_log: Path,
     max_steps: int,
@@ -127,12 +219,27 @@ def _run_task(
     wrapper = WebArenaEnvWrapper(env)
     state: AgentState = new_state(aim="")
     intent = ""
+    retrieved: list[RetrievedRecord] = []
 
     try:
         obs, _info = wrapper.reset()
         intent = str(obs.get("goal", ""))
         state = new_state(aim=intent)
-        state["memories"] = []
+
+        retrieved = index.search(
+            intent,
+            k=k,
+            exclude_task_id=task_id if exclude_own_memory else None,
+        )
+        state["memories"] = _flatten_entries_for_think(
+            [entry for _, _, entry in retrieved]
+        )
+        print(
+            f"[Task {task_id}] retrieved {len(retrieved)} entries "
+            f"({len(state['memories'])} item(s)) ids="
+            f"{_audit_ids(retrieved)}",
+            flush=True,
+        )
 
         graph = build_graph(wrapper, make_think(client), max_steps=max_steps)
         state = graph.invoke(state)
@@ -153,6 +260,7 @@ def _run_task(
             final_state_yaml=final_state_yaml,
             bot_response=bot_response,
             run_status=RUN_STATUS_OK,
+            retrieved=retrieved,
         )
         print(
             f"[Task {task_id}] harness_success={wrapper.last_reward > 0} "
@@ -183,6 +291,7 @@ def _run_task(
             final_state_yaml=final_state_yaml,
             bot_response=bot_response,
             run_status=RUN_STATUS_AGENT_ERROR,
+            retrieved=retrieved,
         )
     finally:
         wrapper.close()
@@ -196,12 +305,23 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--start-id", type=int, default=0)
     parser.add_argument("--end-id", type=int, default=811)
     parser.add_argument(
+        "--k",
+        type=int,
+        default=DEFAULT_K,
+        help="How many memory entries to inject into the Think prompt (default: 3)",
+    )
+    parser.add_argument(
+        "--exclude-own-memory",
+        action="store_true",
+        help="Leave-one-out: never retrieve the private memory built from the task's own trajectory",
+    )
+    parser.add_argument(
         "--reset-every", type=int, default=0, help="Full reset every N tasks (0=off)"
     )
     parser.add_argument(
         "--csv-path",
         type=Path,
-        default=DEFAULT_TRAJECTORIES_CSV,
+        default=DEFAULT_COMBINED_RUN_CSV,
         help="Append-only trajectories CSV output path",
     )
     parser.add_argument(
@@ -230,6 +350,25 @@ def main(argv: list[str] | None = None) -> None:
     require_nltk_punkt_tab()
     require_ollama_model(QWEN_MODEL)
 
+    memory_pairs = load_memory_entries_from_csv(PRIVATE_MEMORIES_CSV)
+    if not memory_pairs:
+        print(f"No retrievable private memories in {PRIVATE_MEMORIES_CSV}", file=sys.stderr)
+        sys.exit(1)
+
+    embedder = Embedder()
+    store = MemoryStore.load(SHARED_STORE, user_id="shared", embedder=embedder)
+    shared_entries = [entry for entry in store.all() if entry.embedding is not None]
+    if not shared_entries:
+        print(f"No retrievable shared memories in {SHARED_STORE}", file=sys.stderr)
+        sys.exit(1)
+
+    index = CombinedMemoryIndex(memory_pairs, shared_entries, embedder)
+    print(
+        f"[Memory] Loaded {index.n_private} private + {index.n_shared} shared "
+        f"entries (k={args.k}, exclude_own_memory={args.exclude_own_memory})",
+        flush=True,
+    )
+
     smoke = not args.skip_smoke
     prepare_webarena(
         headless=args.headless,
@@ -241,7 +380,7 @@ def main(argv: list[str] | None = None) -> None:
 
     template_ids = load_intent_template_ids()
     ok_task_ids = load_ok_task_ids(args.csv_path)
-    ensure_csv_header(args.csv_path, TRAJECTORY_CSV_COLUMNS)
+    ensure_csv_header(args.csv_path, MEMORY_RUN_CSV_COLUMNS)
 
     client = _build_client(seed)
 
@@ -264,6 +403,9 @@ def main(argv: list[str] | None = None) -> None:
             task_id=task_id,
             intent_template_id=intent_template_id,
             client=client,
+            index=index,
+            k=args.k,
+            exclude_own_memory=args.exclude_own_memory,
             csv_path=args.csv_path,
             infra_log=args.infra_log,
             max_steps=args.max_steps,

@@ -1,30 +1,6 @@
-"""Thin Mistral chat wrapper for the WP1.3 Think node.
+"""Mistral chat client. Same ChatClient shape as OllamaClient.
 
-Keeps the rest of the codebase free of ``mistralai`` types so that the
-agent loop can be unit-tested with a fake client (any object exposing
-``chat(system, user)`` is enough).
-
-Environment-key loading is the runner's job, not this client's: the
-runner calls ``load_dotenv()`` once at startup so the wrapper never
-has to remember. ``MISTRAL_API_KEY`` is read here because the SDK
-requires a key string, but the value comes from the already-loaded
-environment.
-
-Rate-limit handling: a 429 from Mistral propagates as the underlying
-``SDKError`` rather than being silently retried. Backoff was previously
-done here, but it masked free-tier quota exhaustion as a "slow run"
-instead of a clear failure. The agent loop should switch to
-``--model qwen`` (local Ollama) on a sustained 429.
-
-Timeouts: ``request_timeout`` is converted to milliseconds and passed
-to the SDK as ``timeout_ms`` so a hung Mistral call does not freeze
-the LangGraph loop indefinitely.
-
-Missing-model / auth handling: a bad model name or invalid key
-surfaces as the SDK's own ``NotFoundError`` / ``AuthenticationError``
-on the first chat call. The Think node lets it propagate so the
-runner's ``finally`` block closes the browser cleanly and the user
-sees a real error rather than 30 iterations of identical failures.
+The runner loads the environment; this class only reads MISTRAL_API_KEY.
 """
 
 from __future__ import annotations
@@ -36,7 +12,7 @@ from mistralai.client import Mistral
 
 
 class MissingMistralApiKeyError(RuntimeError):
-    """Raised when ``MISTRAL_API_KEY`` is not available in the environment."""
+    """Raised when MISTRAL_API_KEY is not set."""
 
 
 DEFAULT_REQUEST_TIMEOUT_SECONDS = 60.0
@@ -44,20 +20,10 @@ DEFAULT_MAX_RESPONSE_TOKENS = 64
 
 
 class MistralClient:
-    """Minimal Mistral chat wrapper.
+    """Mistral chat client.
 
-    Reads ``MISTRAL_API_KEY`` from the environment if no ``api_key`` is
-    given; environment loading itself happens once in the runner, not
-    here. The model name is bound at construction time because the WP1
-    loop sends the same kind of prompt every step.
-
-    ``max_response_tokens`` matches :class:`OllamaClient`'s
-    ``num_predict`` default of 64: the agent grammar is one short
-    line, so capping the response stops a confused model from rambling.
-
-    ``request_timeout`` (seconds) is forwarded to the SDK as
-    ``timeout_ms`` so a hung chat call surfaces as an SDK error in
-    bounded time rather than freezing the agent loop.
+    Reads MISTRAL_API_KEY if no api_key is given. max_response_tokens
+    defaults to 64, matching OllamaClient's short-reply cap.
     """
 
     def __init__(
@@ -87,19 +53,10 @@ class MistralClient:
         temperature: float = 0.0,
         max_tokens: int | None = None,
     ) -> str:
-        """Send a single system+user turn and return the assistant text.
+        """Send one system+user turn and return the assistant text.
 
-        ``max_tokens`` overrides the constructor's ``max_response_tokens``
-        for a single call; the Think node leaves it at ``None`` (64-token
-        cap), the WP1.6 pipeline raises it for the judge and extractor.
-
-        Any ``SDKError`` (including HTTP 429 rate-limit) propagates
-        immediately so the caller can switch model or surface the
-        failure rather than wait through a silent backoff.
-
-        Temperature defaults to ``0.0`` so WP1.3 development runs are
-        as deterministic as the API allows; raise it later when we want
-        the agent to explore.
+        max_tokens overrides max_response_tokens for this call. Think
+        leaves it at the 64-token cap; the judge and extractor raise it.
         """
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": system},

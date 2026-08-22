@@ -1,24 +1,8 @@
-"""InvisibleInk (Vinod et al., arXiv:2507.02974) smoke harness.
+"""InvisibleInk (Vinod et al., arXiv:2507.02974) on the 10 toy memories.
 
-Mirrors Algorithm 1 from InvisibleInk / the official ``invink`` package
-on the same 10 toy rows as ``WP2_3.py``, while reusing this project's
-Gemma 2 IT token plumbing and WP2 round-2 ``wrap`` prompt. Production
-Amin code in ``src/agent_memories/agent/privacy/`` is left untouched.
-
-Per-token steps (paper Alg. 1 / ``invink.generate`` inner loop):
-
-1. Prefill ``B`` sensitive prompts plus one public prompt.
-2. Build Top-k+ vocabulary from public logits only:
-   ``{y : φ_pub(y) ≥ ℓ − 2C/B}`` (paper ``B``, not ``invink``'s
-   ``batch_size = B+1`` call-site quirk).
-3. DClip-aggregate private logits:
-   ``φ_bar = φ_pub + (1/B) Σ clip_C(φ_i − φ_pub)``.
-4. Sample from ``softmax(φ_bar[V_k+] / τ)``; spend privacy on every
-   token (no Amin SVT public path).
-
-Clip ``C`` is calibrated from target ``(ε, δ)`` via the tight zCDP
-conversion used by ``invink.utils.cdp_rho`` / ``get_clip``:
-``C = B τ √(2 ρ / T)`` with ``ρ`` inverted from ``ε`` at fixed ``δ``.
+Same rows as WP2_3.py. Prefill B private prompts plus one public prompt,
+DClip-aggregate, sample from Top-k+. Clip C is calibrated from the
+target (eps, delta) via zCDP. Gemma 2 IT plumbing; Amin code is untouched.
 """
 
 from __future__ import annotations
@@ -36,14 +20,14 @@ TAU = 1.0  # sampling temperature
 TOP_K = 100  # top-k+ truncation parameter
 T = 80  # max tokens; used to calibrate C
 DELTA = 1e-5  # ADP failure probability (invink default)
-EPSILON = 10.0  # target (ε, δ)-DP budget (loose WP2_3-comparable demo)
+EPSILON = 10.0  # target (eps, delta)-DP budget (loose WP2_3-comparable demo)
 LABEL = "attending a recent event"
 
 EXAMPLES_PATH = "scripts/amin_et_al/examples.csv"
 
 
 def _cdp_delta(rho: float, eps: float) -> float:
-    """Tight zCDP → δ at fixed ε (invink ``cdp_delta``)."""
+    """Tight zCDP -> delta at fixed eps (invink cdp_delta)."""
     if rho == 0.0:
         return 0.0
     amin, amax = 1.0001, max(2.0, (eps + 1.0) / (2.0 * rho) + 2.0)
@@ -65,7 +49,7 @@ def _cdp_delta(rho: float, eps: float) -> float:
 
 
 def eps_from_rho(rho: float, delta: float) -> float:
-    """Smallest ε such that ρ-zCDP implies (ε, δ)-DP (invink ``cdp_eps``)."""
+    """Smallest eps such that rho-zCDP implies (eps, delta)-DP (invink cdp_eps)."""
     if rho == 0.0:
         return 0.0
     epsmin, epsmax = 0.0, rho + 2.0 * math.sqrt(rho * math.log(1.0 / delta))
@@ -79,7 +63,7 @@ def eps_from_rho(rho: float, delta: float) -> float:
 
 
 def rho_from_eps(eps: float, delta: float) -> float:
-    """Smallest ρ such that ρ-zCDP implies (ε, δ)-DP (invink ``cdp_rho``)."""
+    """Smallest rho such that rho-zCDP implies (eps, delta)-DP (invink cdp_rho)."""
     if eps == 0.0:
         return 0.0
     rhomin, rhomax = 0.0, max(1.0, eps + 1.0)
@@ -93,28 +77,28 @@ def rho_from_eps(eps: float, delta: float) -> float:
 
 
 def rho_for_tokens(num_toks: int, c: float, b: int, tau: float) -> float:
-    """Theorem 2: ρ_seq = T · (C / (B τ))² / 2."""
+    """Theorem 2: rho_seq = T * (C / (B tau))^2 / 2."""
     return float(num_toks) * 0.5 * (c / (float(b) * tau)) ** 2
 
 
 def clip_norm_for_budget(epsilon: float, delta: float, num_toks: int, b: int, tau: float) -> float:
-    """invink ``get_clip`` with paper ``B`` (private count)."""
+    """invink get_clip with paper B (private count)."""
     rho_tot = rho_from_eps(epsilon, delta)
     rho_tok = rho_tot / float(num_toks)
     return float(tau) * float(b) * math.sqrt(max(0.0, 2.0 * rho_tok))
 
 
 def dclip_aggregate(Z: torch.Tensor, z_pub: torch.Tensor, c: float) -> torch.Tensor:
-    """Mean of DClip rows: φ_pub + mean_i clip_C(φ_i − φ_pub)."""
+    """Mean of DClip rows: phi_pub + mean_i clip_C(phi_i - phi_pub)."""
     clipped = z_pub + torch.clamp(Z - z_pub, min=-c, max=c)
     return clipped.mean(dim=0)
 
 
 def expanded_top_vocab(z_pub: torch.Tensor, k: int, c: float, b: int) -> torch.Tensor:
-    """Boolean mask for Top-k+: φ_pub(y) ≥ ℓ − 2C/B (paper B)."""
+    """Boolean mask for Top-k+: phi_pub(y) >= ell - 2C/B (paper B)."""
     if k >= z_pub.numel():
         return torch.ones_like(z_pub, dtype=torch.bool)
-    # k-th largest entry of φ_pub
+    # k-th largest entry of phi_pub
     ell = torch.topk(z_pub, k).values[-1]
     return z_pub >= (ell - 2.0 * c / float(b))
 

@@ -1,3 +1,10 @@
+"""Pull the next-token logit vector from Gemma 2 IT.
+
+Amin Algorithm 1 needs the raw vocabulary logits, not decoded text.
+Smallest script that loads the instruct model and prints the vector
+shape, so I know the HF forward pass is what I think it is.
+"""
+
 import os
 
 import torch
@@ -29,9 +36,9 @@ input_ids = tokenizer.apply_chat_template(
 with torch.no_grad():
     outputs = model(input_ids=input_ids)
 
-# This is what Algorithm 1 needs — raw logit vector over vocabulary
-logits = outputs.logits  # shape: [batch, seq_len, vocab_size]
-next_token_logits = logits[0, -1, :]  # logits for next token prediction
+# Amin Algorithm 1 consumes this: raw logit vector over the vocabulary.
+logits = outputs.logits  # [batch, seq_len, vocab_size]
+next_token_logits = logits[0, -1, :]
 
 print(f"Logit vector shape: {next_token_logits.shape}")
 print(f"Vocabulary size: {next_token_logits.shape[0]}")

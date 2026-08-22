@@ -1,15 +1,7 @@
-"""Illustrate how Amin et al. clipping reshapes a logit vector.
+"""How Amin clipping reshapes one private next-token logit vector.
 
-Uses one example from ``scripts/amin_et_al/examples.csv``, builds private and
-public prompts via the existing round-1 wrapper, captures the private branch's
-next-token logits before sampling, and compares the baseline distribution to
-clipped versions at c=50, c=20, and c=10.
-
-Outputs:
-- ``logit_rank_comparison.png``
-- ``logit_distribution_comparison.png``
-- ``softmax_mass_comparison.png``
-- ``top10_tokens_before_after_clipping.csv``
+One row from examples.csv, baseline vs c=50/20/10. Writes rank and
+distribution plots plus a top-10 CSV under outputs/.
 """
 
 from __future__ import annotations
@@ -33,7 +25,7 @@ TOP_K = 10
 
 
 def _token_label(token_id: int) -> str:
-    """Readable label for one token id."""
+    """Decode one token id to a printable string."""
     text = decode([int(token_id)])
     text = text.replace("\n", "\\n")
     if text.strip():
@@ -42,7 +34,7 @@ def _token_label(token_id: int) -> str:
 
 
 def _extract_private_logits(example_text: str, *, k: int) -> torch.Tensor:
-    """Get one pre-sampling private-branch next-token logit vector."""
+    """Private-branch next-token logits for one example, before sampling."""
     private_prompt = wrap_label(items=example_text, k=k)
     public_prompt = wrap_label(k=k)
     private_ids = encode_chat(private_prompt)
@@ -52,7 +44,7 @@ def _extract_private_logits(example_text: str, *, k: int) -> torch.Tensor:
 
 
 def _build_vectors(base_logits: torch.Tensor) -> dict[str, np.ndarray]:
-    """Baseline and clipped vectors keyed by display label."""
+    """Baseline plus clipped copies, keyed by display label."""
     vectors: dict[str, np.ndarray] = {"baseline": base_logits.numpy()}
     z_batch = base_logits.unsqueeze(0)
     for c in CLIP_VALUES:
@@ -66,7 +58,7 @@ def _plot_ranked_curves(
     out_path: Path,
     top_token_ids: np.ndarray,
 ) -> None:
-    """Figure 1: ranked logits before/after clipping."""
+    """Ranked logits before/after clipping."""
     plt.figure(figsize=(12, 7))
     for name, vec in vectors.items():
         ranked = np.sort(vec)[::-1]
@@ -97,7 +89,7 @@ def _plot_ranked_curves(
 
 
 def _plot_distributions(vectors: dict[str, np.ndarray], out_path: Path) -> None:
-    """Figure 2: value-distribution shift before/after clipping."""
+    """Logit value-distribution shift before/after clipping."""
     plt.figure(figsize=(12, 7))
     bins = 120
     for name, vec in vectors.items():
@@ -130,7 +122,7 @@ def _write_top10_csv(
     top_token_ids: np.ndarray,
     out_path: Path,
 ) -> None:
-    """Save baseline top-10 tokens and their before/after logits."""
+    """Baseline top-10 tokens and their before/after logits."""
     rows: list[dict[str, object]] = []
     baseline = vectors["baseline"]
     for rank, token_id in enumerate(top_token_ids, start=1):

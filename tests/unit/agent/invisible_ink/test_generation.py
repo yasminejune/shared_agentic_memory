@@ -1,4 +1,4 @@
-"""Smoke test for InvisibleInk Algorithm 1 with monkeypatched token plumbing."""
+"""Tests for InvisibleInk Algorithm 1 with monkeypatched token plumbing."""
 
 from __future__ import annotations
 
@@ -24,7 +24,6 @@ class _FakeState:
 
 
 def test_generate_account_is_self_consistent(monkeypatch: pytest.MonkeyPatch) -> None:
-    """generate returns an account whose spent epsilon matches tokens_used."""
     vocab = 32
     stop_id = 0
     # Force an early stop after a few tokens so we don't need a real model.
@@ -92,7 +91,6 @@ def test_generate_account_is_self_consistent(monkeypatch: pytest.MonkeyPatch) ->
 def test_generate_microbatched_account_is_self_consistent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """generate_microbatched matches generate's account self-consistency."""
     vocab = 32
     stop_id = 0
     public_steps = {"n": 0}
@@ -150,7 +148,6 @@ def test_generate_microbatched_account_is_self_consistent(
 
 @pytest.mark.parametrize("chunk_size", [0, -1])
 def test_generate_microbatched_rejects_nonpositive_chunk_size(chunk_size: int) -> None:
-    """chunk_size < 1 raises before any token plumbing is touched."""
     with pytest.raises(ValueError, match="chunk_size must be >= 1"):
         gen.generate_microbatched(
             ["a"],
@@ -167,7 +164,6 @@ def test_generate_microbatched_rejects_nonpositive_chunk_size(chunk_size: int) -
 def test_generate_allows_more_texts_than_accounting_b(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Dissertation §5.2.3: extra bucket members are allowed; account uses b."""
     vocab = 32
     stop_id = 0
     step = {"n": 0}

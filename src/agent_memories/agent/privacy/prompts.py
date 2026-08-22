@@ -1,53 +1,10 @@
-"""Generation prompts for the Amin et al. WP2 sampling mechanism.
+"""Prompt templates shared by the Amin sampler and InvisibleInk.
 
-Two templates live here, one per WP2 round, both consumed by the
-same per-token loop in :mod:`agent_memories.agent.privacy.privatisation`:
-
-* :data:`GENERIC_PROMPT` / :func:`wrap` — round 2 (shared-memory
-  synthesis, WP2-plan §3.3 content-only template, 2026-06-02 revision,
-  plan §11 deviation 9). The privacy-spending DP path emits only the
-  ``content`` field of a shared ReasoningBank ``MemoryItem`` as a
-  short paragraph of plain prose; the matching ``title`` and
-  ``description`` are produced downstream by the §3.5 Qwen
-  post-processing call on the DP-released content (free under the
-  post-processing property of differential privacy). Each private
-  prompt row is one trajectory :class:`~agent_memories.memory.MemoryEntry`
-  whose 1-3 distilled items occupy the ``{items}`` slot. The previous
-  markdown-scaffolded template (``# [User] / Memory Item: / # [Assistant]``
-  with a ``## Title`` anchor) was retired because (a) the schema
-  tokens consumed a non-trivial fraction of the per-output ``r``-token
-  budget without contributing to the synthesised insight, (b) schema
-  tokens are the most fragile decoding location under Amin's stochastic
-  exponential-mechanism sampling, and (c) the ``## Title`` anchor was
-  incompatible with chat-template instruction-tuned models.
-* :data:`LABEL_PROMPT` / :func:`wrap_label` — round 1 (label
-  synthesis, WP2-plan §3.2). Asks the model for exactly ``k`` short
-  topic labels as a JSON array of strings, with an explicit
-  anti-redundancy clause requiring each label to be on a distinct
-  facet (no synonyms or paraphrases). Promoted from the
-  ``json_discriminative`` variant of
-  ``scripts/amin_et_al/compare_label_prompts.py`` after the
-  numbered-list template (``N. <label>`` lines ending on
-  ``Topics:\\n1.``) was retired: the JSON output format degrades
-  more gracefully under Amin's stochastic exponential-mechanism
-  sampling than the numbered-list anchor, and the distinct-facet
-  clause reduces near-duplicate labels that would later collapse
-  into the same round-2 batch under cosine similarity. No
-  ``label`` placeholder because labels are the *output* of round 1,
-  not an input. The DP-released label list becomes the public input
-  that round 2 consumes via :func:`wrap`.
-
-Both rounds share the same SVT alignment principle: the public
-prompt for the SVT branch is the same template with the items block
-replaced by the literal ``"(no examples)"`` (the default of
-:func:`wrap` and :func:`wrap_label`), so format tokens align between
-the public and private branches and only content tokens consume
-privacy budget (WP2-plan §3.4).
-
-The round-2 ``label`` argument is the DP-released output of round 1
-(WP2-plan §4.3); by the post-processing property of differential
-privacy it is public input to round 2 and incurs no additional
-privacy cost.
+GENERIC_PROMPT / wrap() ask for a short lesson paragraph given a label
+and memory items. LABEL_PROMPT / wrap_label() ask for k topic labels as
+a JSON array. The public prompt is the same template with items
+defaulting to "(no examples)", so format tokens align and only content
+tokens spend privacy budget.
 """
 
 from __future__ import annotations
@@ -93,37 +50,22 @@ LABEL_PROMPT = (
 
 
 def wrap(items: str = "(no examples)", *, label: str) -> str:
-    """Apply :data:`GENERIC_PROMPT` to ``items`` and ``label``.
+    """Fill GENERIC_PROMPT with ``items`` and ``label``.
 
-    The default empty-items body (``"(no examples)"``) yields the
-    public prompt used by Amin Algorithm 1's SVT branch; passing a
-    rendered items block yields the matching private prompt for that
-    batch member. ``label`` is the round-1 DP-released label string;
-    it appears in the same position in both branches and incurs no
-    additional privacy cost by the post-processing property.
+    Default ``items="(no examples)"`` is the public prompt. ``label``
+    sits in the same slot on both branches and does not spend extra
+    budget (post-processing of round-1 DP output).
     """
     return GENERIC_PROMPT.format(label=label, items=items)
 
 
 def wrap_label(items: str = "(no examples)", *, k: int) -> str:
-    """Apply :data:`LABEL_PROMPT` to ``items`` and ``k``.
+    """Fill LABEL_PROMPT with ``items`` and ``k``.
 
-    Round-1 sibling of :func:`wrap`. The default empty-items body
-    (``"(no examples)"``) yields the SVT public prompt; passing a
-    rendered items block yields the matching private prompt for one
-    batch member. ``k`` is the requested number of labels and appears
-    in the same position in both branches so SVT format-token
-    alignment is preserved. No ``label`` argument: round 1 produces
-    the labels, it does not consume them.
-
-    The worked example is sliced from :data:`EXAMPLE_LABELS` to ``k``
-    entries so the demonstration never contradicts the "exactly ``k``"
-    instruction; a six-entry example against ``k = 3`` demonstrated
-    over-generation. Where ``k`` exceeds ``len(EXAMPLE_LABELS)`` the
-    full pool is shown, which under-demonstrates rather than
-    over-demonstrates. The slice depends only on ``k``, which is
-    identical in the public and private branches, so SVT format-token
-    alignment is unaffected.
+    Default ``items="(no examples)"`` is the public prompt. The worked
+    example is EXAMPLE_LABELS sliced to ``k`` so the demonstration
+    matches the "exactly k" instruction. No ``label`` argument: this
+    round produces labels, it does not consume them.
     """
     example = json.dumps(list(EXAMPLE_LABELS[:k]))
     return LABEL_PROMPT.format(k=k, items=items, example=example)

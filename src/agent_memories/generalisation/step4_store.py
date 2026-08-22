@@ -1,7 +1,7 @@
 """Step 4: title and description from DP content, then shared MemoryStore write.
 
-Off the privacy path. The stored embedding is over the DP label
-(dissertation §4.1.3).
+A normal Qwen call. The content is already private, so this step does not
+spend more budget. The stored embedding is over the DP label.
 """
 
 from __future__ import annotations
@@ -11,6 +11,8 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
+
+from dotenv import load_dotenv
 
 from agent_memories.config import load_random_seed
 from agent_memories.generalisation.io import (
@@ -57,6 +59,7 @@ def main(argv: list[str] | None = None) -> None:
         help=f"Shared MemoryStore JSONL (default: {DEFAULT_SHARED_STORE}).",
     )
     args = parser.parse_args(argv)
+    load_dotenv()
 
     _, work_dir = resolve_io_paths(args)
     records = read_jsonl(contents_path(work_dir))
