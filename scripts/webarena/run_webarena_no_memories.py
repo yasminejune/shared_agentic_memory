@@ -43,7 +43,7 @@ from agent_memories.agent.browsergym import deferred_judge
 from agent_memories.agent.browsergym.env import WebArenaEnvWrapper, make_webarena_env
 from agent_memories.agent.browsergym.graph import build_graph
 from agent_memories.agent.browsergym.nodes import extract_bot_response, make_think
-from agent_memories.agent.nodes import OBSERVATION_CHAR_BUDGET
+from agent_memories.agent.constants import OBSERVATION_CHAR_BUDGET
 from agent_memories.agent.state import AgentState, new_state
 from agent_memories.config import load_random_seed, set_global_seed
 from agent_memories.services.ollama_client import OllamaClient
@@ -181,36 +181,9 @@ def _run_task(
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--max-steps", type=int, default=DEFAULT_MAX_STEPS)
-    parser.add_argument("--headless", action="store_true", default=True)
-    parser.add_argument("--no-headless", action="store_false", dest="headless")
+    parser.add_argument("--no-headless", action="store_false", dest="headless", default=True)
     parser.add_argument("--start-id", type=int, default=0)
     parser.add_argument("--end-id", type=int, default=811)
-    parser.add_argument(
-        "--reset-every", type=int, default=0, help="Full reset every N tasks (0=off)"
-    )
-    parser.add_argument(
-        "--csv-path",
-        type=Path,
-        default=DEFAULT_TRAJECTORIES_CSV,
-        help="Append-only trajectories CSV output path",
-    )
-    parser.add_argument(
-        "--infra-log",
-        type=Path,
-        default=DEFAULT_INFRA_LOG,
-        help="Append-only log for connection / reachability failures",
-    )
-    parser.add_argument(
-        "--skip-smoke",
-        action="store_true",
-        help="Skip webarena.0 env open/reset smoke step",
-    )
-    parser.add_argument(
-        "--skip-massage",
-        action="store_true",
-        help="Skip BrowserGym massage_tasks warm-up",
-    )
     args = parser.parse_args(argv)
 
     load_dotenv()
@@ -221,49 +194,38 @@ def main(argv: list[str] | None = None) -> None:
     require_nltk_punkt_tab()
     require_ollama_model(QWEN_MODEL)
 
-    smoke = not args.skip_smoke
     prepare_webarena(
         headless=args.headless,
-        smoke=smoke,
-        massage=not args.skip_massage,
-        infra_log=args.infra_log,
+        smoke=True,
+        massage=True,
+        infra_log=DEFAULT_INFRA_LOG,
     )
     deferred_judge.install()
 
     template_ids = load_intent_template_ids()
-    ok_task_ids = load_ok_task_ids(args.csv_path)
-    ensure_csv_header(args.csv_path, TRAJECTORY_CSV_COLUMNS)
+    ok_task_ids = load_ok_task_ids(DEFAULT_TRAJECTORIES_CSV)
+    ensure_csv_header(DEFAULT_TRAJECTORIES_CSV, TRAJECTORY_CSV_COLUMNS)
 
     client = _build_client(seed)
 
-    import browsergym.webarena  # noqa: F401
-    from browsergym.webarena.instance import WebArenaInstance
-
-    instance = WebArenaInstance()
-    tasks_run = 0
     for task_id in range(args.start_id, args.end_id + 1):
         if task_id in ok_task_ids:
             print(f"[Task {task_id}] skipped (run_status=ok in CSV)", flush=True)
             continue
-
-        if args.reset_every > 0 and tasks_run > 0 and tasks_run % args.reset_every == 0:
-            print(f"[Runner] full_reset() after {tasks_run} tasks...", flush=True)
-            instance.full_reset()
 
         intent_template_id = template_ids.get(task_id, -1)
         _run_task(
             task_id=task_id,
             intent_template_id=intent_template_id,
             client=client,
-            csv_path=args.csv_path,
-            infra_log=args.infra_log,
-            max_steps=args.max_steps,
+            csv_path=DEFAULT_TRAJECTORIES_CSV,
+            infra_log=DEFAULT_INFRA_LOG,
+            max_steps=DEFAULT_MAX_STEPS,
             headless=args.headless,
         )
-        tasks_run += 1
 
-    print(f"[Runner] Done. Trajectories at {args.csv_path}", flush=True)
-    calls_file = judge_calls_path(args.csv_path)
+    print(f"[Runner] Done. Trajectories at {DEFAULT_TRAJECTORIES_CSV}", flush=True)
+    calls_file = judge_calls_path(DEFAULT_TRAJECTORIES_CSV)
     if calls_file.exists():
         n = sum(1 for _ in calls_file.open("r", encoding="utf-8"))
         print(

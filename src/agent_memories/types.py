@@ -12,8 +12,7 @@ from typing import Protocol
 class ChatClient(Protocol):
     """Anything that can complete a chat turn.
 
-    MistralClient and OllamaClient satisfy this, and so does a test
-    double with a matching chat method. max_tokens is optional so the
+    MistralClient and OllamaClient satisfy this. max_tokens is optional so the
     ReasoningBank judge and extractor can raise the 64-token Think cap.
     """
 

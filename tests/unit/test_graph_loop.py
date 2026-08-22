@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 from agent_memories.agent import build_graph, new_state
-from agent_memories.agent.nodes import make_act, make_think
+from agent_memories.agent.playwright.nodes import make_act, make_think
 
 
 class _FakePage:

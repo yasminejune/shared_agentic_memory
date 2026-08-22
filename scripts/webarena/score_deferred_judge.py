@@ -30,6 +30,10 @@ from evaluation.webarena_judge.scorer import (
     score_task,
 )
 
+# Minimum seconds between API attempts (success or failure); 429 retries use >=60s.
+SLEEP_BETWEEN = 1.0
+MAX_RETRIES = 3
+
 
 def _export_bare_wa_vars() -> None:
     """Copy WA_* vars to their bare names for the webarena import-time assertion."""
@@ -71,22 +75,6 @@ def main(argv: list[str] | None = None) -> None:
         required=True,
         help="Judge-calls JSONL file produced by the runner",
     )
-    parser.add_argument(
-        "--out",
-        type=Path,
-        default=None,
-        help="Output judge-scores CSV (default: <calls_stem>_scores.csv)",
-    )
-    parser.add_argument("--model", type=str, default=JUDGE_MODEL)
-    parser.add_argument(
-        "--sleep",
-        type=float,
-        default=1.0,
-        help="Minimum seconds between API attempts (success or failure); 429 retries use >=60s",
-    )
-    parser.add_argument("--max-retries", type=int, default=3)
-    parser.add_argument("--start-id", type=int, default=None)
-    parser.add_argument("--end-id", type=int, default=None)
     args = parser.parse_args(argv)
 
     load_dotenv()
@@ -100,18 +88,14 @@ def main(argv: list[str] | None = None) -> None:
         print(f"Judge-calls file not found: {args.calls}", file=sys.stderr)
         sys.exit(1)
 
-    out_path = args.out or args.calls.with_name(
+    out_path = args.calls.with_name(
         args.calls.stem.replace("_judge_calls", "") + "_judge_scores.csv"
     )
 
-    client = MistralClient(model=args.model, max_response_tokens=JUDGE_MAX_TOKENS)
+    client = MistralClient(model=JUDGE_MODEL, max_response_tokens=JUDGE_MAX_TOKENS)
     install_mistral_judge(client)
 
     all_records = _load_calls(args.calls)
-    if args.start_id is not None:
-        all_records = [r for r in all_records if r["task_id"] >= args.start_id]
-    if args.end_id is not None:
-        all_records = [r for r in all_records if r["task_id"] <= args.end_id]
 
     already_scored = _load_scored_task_ids(out_path)
 
@@ -141,13 +125,13 @@ def main(argv: list[str] | None = None) -> None:
         verdicts, judge_product, final_reward, final_success, status = score_task(
             calls,
             deferred_reward,
-            max_retries=args.max_retries,
-            sleep_between=args.sleep,
+            max_retries=MAX_RETRIES,
+            sleep_between=SLEEP_BETWEEN,
         )
 
         row = {
             "task_id": str(task_id),
-            "judge_model": args.model,
+            "judge_model": JUDGE_MODEL,
             "n_calls": str(len(calls)),
             "verdicts": json.dumps(verdicts),
             "judge_product": str(judge_product),
@@ -179,7 +163,7 @@ def main(argv: list[str] | None = None) -> None:
     }
 
     print(
-        f"\n[Judge] Scored {scored_ok}/{total} tasks successfully "
+        f"\n[Judge] Scored {scored_ok}/{total} tasks "
         f"({new_scored - len(unresolved)} new this run, {already_count} already scored).",
         flush=True,
     )

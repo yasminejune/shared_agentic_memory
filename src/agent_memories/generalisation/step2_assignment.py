@@ -8,8 +8,6 @@ buffer.
 
 from __future__ import annotations
 
-import argparse
-import sys
 from collections.abc import Sequence
 from typing import Any
 
@@ -25,13 +23,13 @@ from agent_memories.generalisation.buffer import (
 )
 from agent_memories.generalisation.io import (
     BUCKET_SIZE,
-    add_io_arguments,
+    MEMORIES_CSV,
+    WORK_DIR,
     assignments_path,
     buffer_path,
     labels_path,
     load_memory_entries_from_csv,
     read_json,
-    resolve_io_paths,
     write_json,
 )
 from agent_memories.memory import Embedder, MemoryEntry
@@ -106,13 +104,8 @@ def run_assignment(
     }
 
 
-def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    add_io_arguments(parser)
-    parser.add_argument("--x-per-label", type=int, default=BUCKET_SIZE)
-    args = parser.parse_args(argv)
-
-    csv_path, work_dir = resolve_io_paths(args)
+def main() -> None:
+    csv_path, work_dir = MEMORIES_CSV, WORK_DIR
     labels_file = labels_path(work_dir)
     labels_artefact = read_json(labels_file)
     labels = list(labels_artefact["labels"])
@@ -130,7 +123,7 @@ def main(argv: list[str] | None = None) -> None:
         csv_entries,
         labels,
         embedder=embedder,
-        x_per_label=args.x_per_label,
+        x_per_label=BUCKET_SIZE,
         carry_over=carry,
     )
     carry_entries: list[MemoryEntry] = artefact.pop("_carry_over_entries")
@@ -139,12 +132,11 @@ def main(argv: list[str] | None = None) -> None:
 
     print(f"[Step 2] bucket sizes: {artefact['bucket_sizes']}")
     print(
-        f"[Step 2] triggered labels (bucket >= {args.x_per_label}): "
-        f"{artefact['triggered_labels']}"
+        f"[Step 2] triggered labels (bucket >= {BUCKET_SIZE}): " f"{artefact['triggered_labels']}"
     )
     print(f"[Step 2] carry-over: {len(carry_entries)} entries -> {buffer_path(work_dir)}")
     print(f"[Step 2] Wrote {assignments_path(work_dir)}")
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    main()

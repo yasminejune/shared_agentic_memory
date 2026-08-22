@@ -83,7 +83,9 @@ MEMORY_RUN_CSV_COLUMNS = [
 ]
 
 DEFAULT_TRAJECTORIES_CSV = REPO_ROOT / "data" / "webarena" / "trajectories_A_no_memories.csv"
-DEFAULT_MEMORIES_CSV = REPO_ROOT / "data" / "webarena" / "trajectories_memories.csv"
+DEFAULT_MEMORIES_CSV = (
+    REPO_ROOT / "data" / "webarena" / "trajectories_reasoningbank_private_memories.csv"
+)
 DEFAULT_MEMORY_RUN_CSV = REPO_ROOT / "data" / "webarena" / "trajectories_B_private_run.csv"
 DEFAULT_INFRA_LOG = REPO_ROOT / "data" / "webarena" / "infra_errors.log"
 DEFAULT_MAX_STEPS = 30

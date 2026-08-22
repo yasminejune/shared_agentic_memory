@@ -38,7 +38,7 @@ from agent_memories.agent.privacy.privatisation import (
     softmax_l1_distance,
 )
 
-S = 100  # batch size (100 examples)
+S = 100  # expected Amin batch size, not the toy CSV row count
 C = 50.0  # logit clip
 TAU = 1.0  # private temperature
 TAU_PUBLIC = 1.5  # public temperature
@@ -57,7 +57,7 @@ OUTPUTS_PATH = Path("scripts/amin_et_al/outputs/label_generation_mode_comparison
 # Frozen snapshot of compare_label_prompts.JSON_SPECIFIC_PROMPT.
 JSON_SPECIFIC_PROMPT = (
     "Return exactly {k} labels, one of which must reflect the memory item below.\n"
-    "Each label must be 1–4 words.\n"
+    "Each label must be 1-4 words.\n"
     "Return only a JSON array of strings.\n"
     "No explanations, numbering, markdown, or extra text.\n"
     "\n"
@@ -70,8 +70,8 @@ JSON_SPECIFIC_PROMPT = (
 )
 
 SINGLE_SPECIFIC_PROMPT = (
-    "Return one short label (1–4 words) that reflects the memory items below.\n"
-    "Output only the label text — no JSON, numbering, markdown, or extra text.\n"
+    "Return one short label (1-4 words) that reflects the memory items below.\n"
+    "Output only the label text - no JSON, numbering, markdown, or extra text.\n"
     "\n"
     "Memory items:\n"
     "{items}"
@@ -224,7 +224,7 @@ def generate_sequential_labels(
 
             # Lines 12-16 (private) or 17-18 (public)
             if d_hat >= theta_hat and t < r:
-                # Lines 13-14 via sample_private; line 15-16 below
+                # Lines 13-14 via sample_private; lines 15-16 inline
                 tok = sample_private(Z, c, tau, s)
                 t += 1
                 theta_hat = theta + _laplace(sigma)

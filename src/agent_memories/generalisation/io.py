@@ -7,7 +7,6 @@ module pulls in BrowserGym at import time.
 
 from __future__ import annotations
 
-import argparse
 import csv
 import json
 from dataclasses import asdict
@@ -18,7 +17,7 @@ from agent_memories.agent.invisible_ink.accounting import InvisibleInkAccount
 from agent_memories.config import DEFAULT_MEMORY_DIR, REPO_ROOT
 from agent_memories.memory import MemoryEntry
 
-DEFAULT_RUN = 1
+RUN = 1
 K_LABELS = 116
 BUCKET_SIZE = 7
 EPSILON = 10.0
@@ -36,15 +35,8 @@ CONTENTS_FILENAME = "contents.jsonl"
 BUFFER_FILENAME = ".shared_buffer.jsonl"
 DEFAULT_SHARED_STORE = DEFAULT_MEMORY_DIR / "shared.jsonl"
 
-
-def memories_csv_for_run(run: int) -> Path:
-    """Return data/webarena/trajectories_memories_{run}.csv."""
-    return REPO_ROOT / "data" / "webarena" / f"trajectories_memories_{run}.csv"
-
-
-def work_dir_for_run(run: int) -> Path:
-    """Return data/webarena/shared_memory_run_{run}/."""
-    return REPO_ROOT / "data" / "webarena" / f"shared_memory_run_{run}"
+MEMORIES_CSV = REPO_ROOT / "data" / "webarena" / "trajectories_reasoningbank_private_memories.csv"
+WORK_DIR = REPO_ROOT / "data" / "webarena" / f"shared_memory_run_{RUN}"
 
 
 def labels_path(work_dir: Path) -> Path:
@@ -61,37 +53,6 @@ def contents_path(work_dir: Path) -> Path:
 
 def buffer_path(work_dir: Path) -> Path:
     return work_dir / BUFFER_FILENAME
-
-
-def add_io_arguments(parser: argparse.ArgumentParser) -> None:
-    """Attach --run, --memories-csv, and --work-dir."""
-    parser.add_argument(
-        "--run",
-        type=int,
-        default=DEFAULT_RUN,
-        help="WebArena memories-CSV run index (default: 1).",
-    )
-    parser.add_argument(
-        "--memories-csv",
-        type=Path,
-        default=None,
-        help="Override path to trajectories_memories_{run}.csv.",
-    )
-    parser.add_argument(
-        "--work-dir",
-        type=Path,
-        default=None,
-        help="Directory for step artefacts (default: data/webarena/shared_memory_run_{run}).",
-    )
-
-
-def resolve_io_paths(args: argparse.Namespace) -> tuple[Path, Path]:
-    """Return (memories_csv, work_dir) from parsed CLI args."""
-    csv_path = (
-        args.memories_csv if args.memories_csv is not None else memories_csv_for_run(args.run)
-    )
-    work_dir = args.work_dir if args.work_dir is not None else work_dir_for_run(args.run)
-    return csv_path, work_dir
 
 
 def render_item_block(entry: MemoryEntry) -> str:
@@ -142,7 +103,8 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
 
 
 def read_json(path: Path) -> dict[str, Any]:
-    return json.loads(path.read_text(encoding="utf-8"))
+    data: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
+    return data
 
 
 def write_jsonl(path: Path, records: list[dict[str, Any]]) -> None:
@@ -173,32 +135,30 @@ __all__ = [
     "BUCKET_SIZE",
     "BUFFER_FILENAME",
     "CONTENTS_FILENAME",
-    "DEFAULT_RUN",
     "DEFAULT_SHARED_STORE",
     "DELTA",
     "EPSILON",
     "GEMMA_CHUNK_SIZE",
     "K_LABELS",
     "LABELS_FILENAME",
+    "MEMORIES_CSV",
     "QWEN_MODEL",
+    "RUN",
     "STEP1_MAX_TOKENS",
     "STEP3_MAX_TOKENS",
     "TAU",
     "TOP_K",
+    "WORK_DIR",
     "account_to_dict",
-    "add_io_arguments",
     "assignments_path",
     "buffer_path",
     "contents_path",
     "entry_from_payload",
     "labels_path",
     "load_memory_entries_from_csv",
-    "memories_csv_for_run",
     "read_json",
     "read_jsonl",
     "render_item_block",
-    "resolve_io_paths",
-    "work_dir_for_run",
     "write_json",
     "write_jsonl",
 ]

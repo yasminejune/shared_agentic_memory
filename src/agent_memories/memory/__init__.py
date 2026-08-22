@@ -12,7 +12,7 @@ __all__ = ["Embedder", "MemoryItem", "MemoryEntry", "MemoryStore", "MemoryPipeli
 def __getattr__(name: str) -> object:
     """Load MemoryPipeline only when a caller asks for it.
 
-    Importing MemoryEntry must not pull LangGraph via the pipeline module.
+    MemoryEntry should not pull in the judge and extractor prompts.
     """
     if name == "MemoryPipeline":
         from .pipeline import MemoryPipeline

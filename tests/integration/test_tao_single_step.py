@@ -8,7 +8,7 @@ import pytest
 from playwright.sync_api import sync_playwright
 
 from agent_memories.agent import build_graph, new_state
-from agent_memories.agent.nodes import make_think_scripted
+from agent_memories.agent.playwright.nodes import make_think_scripted
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = REPO_ROOT / "tests" / "data" / "single_step.html"

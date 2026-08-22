@@ -12,7 +12,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 from agent_memories.agent import build_graph, new_state
-from agent_memories.agent.nodes import make_think_scripted
+from agent_memories.agent.playwright.nodes import make_think_scripted
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = REPO_ROOT / "tests" / "data" / "single_step.html"
@@ -20,9 +20,7 @@ FIXTURE = REPO_ROOT / "tests" / "data" / "single_step.html"
 
 def main() -> None:
     stub_actions = [{"type": "click", "selector": "#go"}]
-    state = new_state(
-        aim="Click the Go button on the fixture page."
-    )
+    state = new_state(aim="Click the Go button on the fixture page.")
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)

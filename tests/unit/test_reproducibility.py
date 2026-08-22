@@ -18,8 +18,8 @@ def test_load_random_seed_reads_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.mark.unit
 def test_load_random_seed_strips_whitespace(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("RANDOM_SEED", "  42  ")
-    assert load_random_seed() == 42
+    monkeypatch.setenv("RANDOM_SEED", "  3006  ")
+    assert load_random_seed() == 3006
 
 
 @pytest.mark.unit

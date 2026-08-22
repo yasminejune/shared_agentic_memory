@@ -36,7 +36,7 @@ Required before `import browsergym.webarena`. Installed automatically by `make i
 
 Step A — agent trajectories only (tasks 0–4 first):
 
-  python scripts/webarena/run_webarena.py --start-id 0 --end-id 4
+  python scripts/webarena/run_webarena_no_memories.py --start-id 0 --end-id 4
 
 Step B — judge + memory extraction + embeddings from trajectories:
 
@@ -46,11 +46,6 @@ Full corpus (812 tasks, multi-day):
 
   python scripts/webarena/run_webarena.py
   python scripts/webarena/build_memories_from_trajectories.py
-
-Navigation-sandbox re-run (keeps trajectories_0.csv as the paired baseline):
-
-  python scripts/webarena/run_webarena.py \
-    --csv-path data/webarena/trajectories_0_navfix.csv
 
 Resume: each script skips task_ids already completed in its own output CSV.
 
@@ -69,40 +64,3 @@ Memories: data/webarena/trajectories_memories.csv (gitignored).
 judge_outcome and harness_success are independent columns:
 - judge_outcome: ReasoningBank LLM-as-Judge on the trajectory
 - harness_success: WebArena eval harness (reward > 0 via BrowserGym)
-
-## 7. Deferred LLM judge (two-phase scoring)
-
-118 of 812 tasks use an LLM judge (fuzzy_match / ua_match). The judge
-is deferred: during the browser run it returns 1.0 and records its
-inputs to a sidecar JSONL file. harness_reward in the trajectories CSV
-is therefore the deterministic factor only; judge_pending=True marks
-rows whose reward is provisional.
-
-Step C — score the deferred judge calls with Mistral:
-
-  python scripts/webarena/score_deferred_judge.py \
-    --calls data/webarena/trajectories_A_no_memories_judge_calls.jsonl
-
-The scorer is resumable: re-running retries failed/unparseable tasks
-and skips already-scored ones. Output: <stem>_judge_scores.csv with
-final_reward = harness_reward * judge_product.
-
-The pinned judge model is mistral-large-2512 (overridable via --model).
-MISTRAL_API_KEY must be set in .env or the environment.
-
-## 8. Reproducibility (RANDOM_SEED)
-
-RANDOM_SEED is required in .env (no default, no CLI override). Example:
-
-  RANDOM_SEED=3006
-
-Evaluation scripts (run_webarena.py, run_webarena_with_memories.py,
-build_memories_from_trajectories.py, score_deferred_judge.py) call
-load_random_seed() after load_dotenv(), seed Python/numpy/torch, and
-pass the seed into OllamaClient options. Each run logs
-random_seed=<value> at startup.
-
-Limits: Ollama reproducibility is best-effort (same machine, model
-tag, and seed); WebArena Docker DB state can still drift across tasks
-(--reset-every / WA_FULL_RESET help); Mistral judge has no seed API
-parameter (temperature=0.0 only).

@@ -23,11 +23,8 @@ from dotenv import load_dotenv
 from playwright.sync_api import sync_playwright
 
 from agent_memories.agent import build_graph, new_state
-from agent_memories.agent.nodes import (
-    DEFAULT_STUCK_THRESHOLD,
-    OBSERVATION_CHAR_BUDGET,
-    make_think,
-)
+from agent_memories.agent.constants import DEFAULT_STUCK_THRESHOLD, OBSERVATION_CHAR_BUDGET
+from agent_memories.agent.playwright.nodes import make_think
 from agent_memories.agent.state import AgentState
 from agent_memories.config import DEFAULT_MEMORY_DIR, DEFAULT_USER_ID, load_random_seed
 from agent_memories.memory import Embedder, MemoryPipeline, MemoryStore

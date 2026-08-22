@@ -92,7 +92,9 @@ def test_cycle_assembly_takes_whole_entries_not_sibling_items(tmp_path) -> None:
     assert [entry.query for entry in new_entries] == ["First task", "Second task"]
     assert assignment_batch == new_entries
     assert processed_ids == set()
-    assert all(len(entry.items) == expected for entry, expected in zip(new_entries, (3, 1)))
+    assert all(
+        len(entry.items) == expected for entry, expected in zip(new_entries, (3, 1), strict=True)
+    )
 
     processed_ids.update(entry_id(entry) for entry in new_entries)
     next_entries, _, _ = WP2_pipeline._assemble_cycle_entries(

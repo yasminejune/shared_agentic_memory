@@ -1,9 +1,9 @@
-"""Step 2 assignment: nearest label by cosine of label vs query embeddings.
+"""Nearest label by cosine of label vs query embeddings.
 
 Each private entry is assigned to one label. Per Amin Assumption 1 the
 assignment depends only on the entry itself (its query embedding) and
-the public labels, never on other memories in the batch. A label
-proceeds to Step 3 once enough entries sit in it.
+the public labels, never on other memories in the batch. Gating (does
+this label have enough entries for Step 3) is the caller's job.
 """
 
 from __future__ import annotations

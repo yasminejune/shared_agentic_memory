@@ -28,7 +28,7 @@ from agent_memories.agent.privacy import (
     solve_r,
 )
 
-S = 100  # batch size (100 examples)
+S = 100  # expected Amin batch size, not the toy CSV row count
 C = 50.0  # logit clip
 TAU = 1.0  # private temperature
 TAU_PUBLIC = 1.5  # public temperature
@@ -36,7 +36,7 @@ SIGMA = 0.1  # SVT noise scale (same as WP2_8.py)
 THETA = 0.0  # SVT threshold (same as WP2_8.py)
 R_MAX = 80  # cap passed to solve_r
 EPSILON_DEFAULT = 200.0
-K_DEFAULT = 3  # matches the JSON variant's native example count
+K_DEFAULT = 3  # labels requested per generate call
 RUNS_DEFAULT = 1
 
 EXAMPLES_PATH = Path("scripts/amin_et_al/examples.csv")
@@ -61,7 +61,7 @@ NUMBERED_PROMPT = (
 
 JSON_PROMPT = (
     "Return exactly {k} labels.\n"
-    "Each label must be 1–4 words.\n"
+    "Each label must be 1-4 words.\n"
     "Return only a JSON array of strings.\n"
     "No explanations, numbering, markdown, or extra text.\n"
     "\n"
@@ -75,7 +75,7 @@ JSON_PROMPT = (
 
 JSON_ONE_PROMPT = (
     "Return exactly {k} labels, one of which needs to summarise the memory items below.\n"
-    "Each label must be 1–4 words.\n"
+    "Each label must be 1-4 words.\n"
     "Return only a JSON array of strings.\n"
     "No explanations, numbering, markdown, or extra text.\n"
     "\n"
@@ -90,7 +90,7 @@ JSON_ONE_PROMPT = (
 
 JSON_DISCRIMINATIVE_PROMPT = (
     "Return exactly {k} labels that summarise the memory items below.\n"
-    "Each label must be 1–4 words and on a DISTINCT facet — no two labels\n"
+    "Each label must be 1-4 words and on a DISTINCT facet - no two labels\n"
     "may be synonyms, paraphrases, or describe the same aspect.\n"
     "Return only a JSON array of strings.\n"
     "No explanations, numbering, markdown, or extra text.\n"
@@ -105,7 +105,7 @@ JSON_DISCRIMINATIVE_PROMPT = (
 
 JSON_DISCRIMINATIVE_ONE_PROMPT = (
     "Return exactly {k} labels, one of which needs to summarise the memory items below.\n"
-    "Each label must be 1–4 words and on a DISTINCT facet — no two labels\n"
+    "Each label must be 1-4 words and on a DISTINCT facet - no two labels\n"
     "may be synonyms, paraphrases, or describe the same aspect.\n"
     "Return only a JSON array of strings.\n"
     "No explanations, numbering, markdown, or extra text.\n"
@@ -120,7 +120,7 @@ JSON_DISCRIMINATIVE_ONE_PROMPT = (
 
 JSON_SPECIFIC_PROMPT = (
     "Return exactly {k} labels, one of which must reflect the memory item below.\n"
-    "Each label must be 1–4 words.\n"
+    "Each label must be 1-4 words.\n"
     "Return only a JSON array of strings.\n"
     "No explanations, numbering, markdown, or extra text.\n"
     "\n"

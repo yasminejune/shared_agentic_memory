@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from agent_memories.agent.nodes import make_think
+from agent_memories.agent.playwright.nodes import make_think
 from agent_memories.agent.state import AgentState, new_state
 
 
@@ -138,7 +138,7 @@ def test_scroll_and_goto_round_trip() -> None:
 
 @pytest.mark.unit
 def test_observation_yaml_is_truncated_in_user_prompt() -> None:
-    from agent_memories.agent.nodes import OBSERVATION_CHAR_BUDGET
+    from agent_memories.agent.constants import OBSERVATION_CHAR_BUDGET
 
     client = _FakeClient(["click [e1]"])
     huge_tree = "- node\n" * 5000  # well over the 12k character budget
@@ -155,7 +155,7 @@ def test_observation_yaml_is_truncated_in_user_prompt() -> None:
 
 @pytest.mark.unit
 def test_system_prompt_explains_ref_to_action_mapping() -> None:
-    from agent_memories.agent.nodes import THINK_SYSTEM_PROMPT
+    from agent_memories.agent.playwright.nodes import THINK_SYSTEM_PROMPT
 
     assert "EXACTLY one line" in THINK_SYSTEM_PROMPT
     assert "no markdown" in THINK_SYSTEM_PROMPT
@@ -193,7 +193,7 @@ def test_parse_failure_outcome_has_no_hint_appended() -> None:
 
 @pytest.mark.unit
 def test_retrieved_memories_appear_in_user_prompt_with_paper_instruction() -> None:
-    from agent_memories.agent.nodes import MEMORY_INJECTION_INSTRUCTION
+    from agent_memories.agent.constants import MEMORY_INJECTION_INSTRUCTION
 
     client = _FakeClient(["click [e1]"])
     state = _seed_state()
@@ -224,7 +224,7 @@ def test_retrieved_memories_appear_in_user_prompt_with_paper_instruction() -> No
 
 @pytest.mark.unit
 def test_empty_memories_list_omits_memory_block() -> None:
-    from agent_memories.agent.nodes import MEMORY_INJECTION_INSTRUCTION
+    from agent_memories.agent.constants import MEMORY_INJECTION_INSTRUCTION
 
     client = _FakeClient(["click [e1]"])
     state = _seed_state()
@@ -238,7 +238,7 @@ def test_empty_memories_list_omits_memory_block() -> None:
 
 @pytest.mark.unit
 def test_memory_injection_instruction_is_paper_verbatim() -> None:
-    from agent_memories.agent.nodes import MEMORY_INJECTION_INSTRUCTION
+    from agent_memories.agent.constants import MEMORY_INJECTION_INSTRUCTION
 
     expected = (
         "Below are some memory items that I accumulated from past interaction "

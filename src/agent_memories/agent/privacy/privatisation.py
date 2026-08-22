@@ -105,7 +105,7 @@ def generate(
             f"r={r!r}, target_epsilon={target_epsilon!r}."
         )
     if r is None:
-        assert target_epsilon is not None  # XOR check above
+        assert target_epsilon is not None  # guaranteed by the XOR check
         r = solve_r(target_epsilon, delta, s=s, c=c, tau=tau, sigma=sigma)
 
     stop = tg.stop_ids()  # eos plus <end_of_turn> for the IT regime

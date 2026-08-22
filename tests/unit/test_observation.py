@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from agent_memories.agent.observation import format_aria_snapshot
+from agent_memories.agent.playwright.observation import format_aria_snapshot
 
 
 class _FakePage:

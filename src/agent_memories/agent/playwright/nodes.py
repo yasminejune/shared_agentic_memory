@@ -11,6 +11,11 @@ from typing import Any
 
 from playwright.sync_api import Page
 
+from agent_memories.agent.constants import (
+    DEFAULT_STUCK_THRESHOLD,
+    MEMORY_INJECTION_INSTRUCTION,
+    OBSERVATION_CHAR_BUDGET,
+)
 from agent_memories.agent.state import AgentState
 from agent_memories.types import ChatClient
 
@@ -18,24 +23,6 @@ from .actions import ActionParseError, dispatch, parse_action
 from .observation import format_aria_snapshot
 
 NodeFn = Callable[[AgentState], AgentState]
-
-# 12k chars (~3k tokens). Uncapped ARIA YAML overflows a local 8B
-# context window; the server then truncates the front of the prompt.
-OBSERVATION_CHAR_BUDGET = 12_000
-
-# Abort after 5 identical thoughts in a row (repeated parse failures
-# or the same click on a page that never changes).
-DEFAULT_STUCK_THRESHOLD = 5
-
-# ReasoningBank (Ouyang et al. 2025, Appendix A.2). Items shown to Think
-# are title and content only.
-MEMORY_INJECTION_INSTRUCTION = (
-    "Below are some memory items that I accumulated from past interaction "
-    "from the environment that may be helpful to solve the task. You can "
-    "use it when you feel it's relevant. In each step, please first "
-    "explicitly discuss if you want to use each memory item or not, and "
-    "then take action."
-)
 
 
 def _trace(line: str) -> None:

@@ -5,7 +5,6 @@ Writes data/webarena/condition_comparison.csv (and B/C memory-pull CSVs).
 
 from __future__ import annotations
 
-import argparse
 import csv
 import json
 import sys
@@ -20,7 +19,13 @@ PRIVATE_MEMORIES_CSV = (
     REPO_ROOT / "data" / "webarena" / "trajectories_reasoningbank_private_memories.csv"
 )
 SHARED_STORE = DEFAULT_MEMORY_DIR / "shared.jsonl"
-DEFAULT_OUT_DIR = REPO_ROOT / "data" / "webarena"
+OUT_DIR = REPO_ROOT / "data" / "webarena"
+CONDITION_CSVS = (
+    ("A", OUT_DIR / "trajectories_A_no_memories.csv"),
+    ("B", OUT_DIR / "trajectories_B_private_run.csv"),
+    ("C", OUT_DIR / "trajectories_C_shared_only.csv"),
+    ("D", OUT_DIR / "trajectories_D_private_shared.csv"),
+)
 TERMINAL_CONTENT_CHARS = 120
 
 SUMMARY_COLUMNS = [
@@ -292,9 +297,7 @@ def print_table(title: str, columns: Sequence[str], rows: Sequence[dict[str, str
     print(header)
     print("  ".join("-" * widths[i] for i in range(len(columns))))
     for row in display_rows:
-        print(
-            "  ".join(row.get(col, "").ljust(widths[i]) for i, col in enumerate(columns))
-        )
+        print("  ".join(row.get(col, "").ljust(widths[i]) for i, col in enumerate(columns)))
 
 
 def load_condition(path: Path) -> tuple[dict[int, dict[str, str]], dict[int, dict[str, str]]]:
@@ -306,71 +309,51 @@ def load_condition(path: Path) -> tuple[dict[int, dict[str, str]], dict[int, dic
     return rows_by_task, scores
 
 
-def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    parser.add_argument("--a", type=Path, default=None, help="Condition A trajectory CSV")
-    parser.add_argument("--b", type=Path, default=None, help="Condition B trajectory CSV")
-    parser.add_argument("--c", type=Path, default=None, help="Condition C trajectory CSV")
-    parser.add_argument("--d", type=Path, default=None, help="Condition D trajectory CSV")
-    parser.add_argument(
-        "--out-dir",
-        type=Path,
-        default=DEFAULT_OUT_DIR,
-        help=f"Directory for output CSVs (default: {DEFAULT_OUT_DIR})",
-    )
-    args = parser.parse_args(argv)
-
-    named: list[tuple[str, Path]] = []
-    for letter, path in (("A", args.a), ("B", args.b), ("C", args.c), ("D", args.d)):
-        if path is not None:
-            named.append((letter, path))
-    if not named:
-        parser.error("at least one of --a/--b/--c/--d is required")
-
+def main() -> None:
     summary_rows: list[dict[str, str]] = []
     loaded: dict[str, dict[int, dict[str, str]]] = {}
-    for name, path in named:
+    for name, path in CONDITION_CSVS:
         rows_by_task, scores = load_condition(path)
         loaded[name] = rows_by_task
         summary_rows.append(summarise_condition(name, rows_by_task, scores))
 
-    out_dir: Path = args.out_dir
+    out_dir = OUT_DIR
     summary_path = out_dir / "condition_comparison.csv"
     write_csv(summary_path, SUMMARY_COLUMNS, summary_rows)
     print_table(
-        "Table 1 — success rate over 812 tasks (missing, agent_error, unscored judge = 0)",
+        "Table 1 - success rate over 812 tasks (missing, agent_error, unscored judge = 0)",
         SUMMARY_COLUMNS,
         summary_rows,
     )
     print(f"\nWrote {summary_path}")
 
-    if args.b is not None:
-        if not PRIVATE_MEMORIES_CSV.exists():
-            print(
-                f"Private memories CSV not found: {PRIVATE_MEMORIES_CSV}",
-                file=sys.stderr,
-            )
-            sys.exit(1)
-        items_by_task = load_private_memory_items(PRIVATE_MEMORIES_CSV)
-        memory_rows = count_b_pulls(loaded["B"], items_by_task)
-        mem_path = out_dir / "condition_comparison_memories_B.csv"
-        write_csv(mem_path, MEMORY_COLUMNS, memory_rows)
-        print_table("Memories B — injected items (content truncated in terminal)", MEMORY_COLUMNS, memory_rows)
-        print(f"\nWrote {mem_path} ({len(memory_rows)} distinct items)")
+    if not PRIVATE_MEMORIES_CSV.exists():
+        print(f"Private memories CSV not found: {PRIVATE_MEMORIES_CSV}", file=sys.stderr)
+        sys.exit(1)
+    items_by_task = load_private_memory_items(PRIVATE_MEMORIES_CSV)
+    memory_rows = count_b_pulls(loaded["B"], items_by_task)
+    mem_path = out_dir / "condition_comparison_memories_B.csv"
+    write_csv(mem_path, MEMORY_COLUMNS, memory_rows)
+    print_table(
+        "Memories B - injected items (content truncated in terminal)",
+        MEMORY_COLUMNS,
+        memory_rows,
+    )
+    print(f"\nWrote {mem_path} ({len(memory_rows)} distinct items)")
 
-    if args.c is not None:
-        if not SHARED_STORE.exists():
-            print(f"Shared store not found: {SHARED_STORE}", file=sys.stderr)
-            sys.exit(1)
-        shared_items = load_shared_items(SHARED_STORE)
-        memory_rows = count_c_pulls(loaded["C"], shared_items)
-        mem_path = out_dir / "condition_comparison_memories_C.csv"
-        write_csv(mem_path, MEMORY_COLUMNS, memory_rows)
-        print_table("Memories C — injected items (content truncated in terminal)", MEMORY_COLUMNS, memory_rows)
-        print(f"\nWrote {mem_path} ({len(memory_rows)} distinct items)")
+    if not SHARED_STORE.exists():
+        print(f"Shared store not found: {SHARED_STORE}", file=sys.stderr)
+        sys.exit(1)
+    shared_items = load_shared_items(SHARED_STORE)
+    memory_rows = count_c_pulls(loaded["C"], shared_items)
+    mem_path = out_dir / "condition_comparison_memories_C.csv"
+    write_csv(mem_path, MEMORY_COLUMNS, memory_rows)
+    print_table(
+        "Memories C - injected items (content truncated in terminal)",
+        MEMORY_COLUMNS,
+        memory_rows,
+    )
+    print(f"\nWrote {mem_path} ({len(memory_rows)} distinct items)")
 
 
 if __name__ == "__main__":

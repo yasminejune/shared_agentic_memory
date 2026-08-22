@@ -10,7 +10,7 @@ from __future__ import annotations
 from playwright.sync_api import sync_playwright
 
 from agent_memories.agent import build_graph, new_state
-from agent_memories.agent.nodes import make_think_scripted
+from agent_memories.agent.playwright.nodes import make_think_scripted
 
 WEBSITE = "https://www.amazon.co.uk"
 

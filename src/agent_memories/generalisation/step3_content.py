@@ -10,8 +10,6 @@ row per chunk.
 
 from __future__ import annotations
 
-import argparse
-import sys
 from collections.abc import Callable, Sequence
 from typing import Any, TypeVar
 
@@ -27,14 +25,13 @@ from agent_memories.generalisation.io import (
     STEP3_MAX_TOKENS,
     TAU,
     TOP_K,
+    WORK_DIR,
     account_to_dict,
-    add_io_arguments,
     assignments_path,
     contents_path,
     entry_from_payload,
     read_json,
     render_item_block,
-    resolve_io_paths,
     write_jsonl,
 )
 
@@ -110,31 +107,20 @@ def run_content_generation(
     return records
 
 
-def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    add_io_arguments(parser)
-    parser.add_argument("--accounting-b", type=int, default=BUCKET_SIZE)
-    parser.add_argument("--epsilon", type=float, default=EPSILON)
-    parser.add_argument("--delta", type=float, default=DELTA)
-    parser.add_argument("--tau", type=float, default=TAU)
-    parser.add_argument("--top-k", type=int, default=TOP_K)
-    parser.add_argument("--max-tokens", type=int, default=STEP3_MAX_TOKENS)
-    parser.add_argument("--chunk-size", type=int, default=GEMMA_CHUNK_SIZE)
-    args = parser.parse_args(argv)
-
-    _, work_dir = resolve_io_paths(args)
+def main() -> None:
+    work_dir = WORK_DIR
     artefact = read_json(assignments_path(work_dir))
     qualifying = list(artefact.get("qualifying", []))
-    print(f"[Step 3] {len(qualifying)} qualifying label(s); accounting b={args.accounting_b}")
+    print(f"[Step 3] {len(qualifying)} qualifying label(s); accounting b={BUCKET_SIZE}")
     records = run_content_generation(
         qualifying,
-        accounting_b=args.accounting_b,
-        epsilon=args.epsilon,
-        delta=args.delta,
-        tau=args.tau,
-        top_k=args.top_k,
-        max_total_tokens=args.max_tokens,
-        chunk_size=args.chunk_size,
+        accounting_b=BUCKET_SIZE,
+        epsilon=EPSILON,
+        delta=DELTA,
+        tau=TAU,
+        top_k=TOP_K,
+        max_total_tokens=STEP3_MAX_TOKENS,
+        chunk_size=GEMMA_CHUNK_SIZE,
     )
     out = contents_path(work_dir)
     write_jsonl(out, records)
@@ -148,4 +134,4 @@ def main(argv: list[str] | None = None) -> None:
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    main()

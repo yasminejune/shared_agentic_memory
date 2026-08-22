@@ -6,8 +6,6 @@ spend more budget. The stored embedding is over the DP label.
 
 from __future__ import annotations
 
-import argparse
-import sys
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -18,10 +16,9 @@ from agent_memories.config import load_random_seed
 from agent_memories.generalisation.io import (
     DEFAULT_SHARED_STORE,
     QWEN_MODEL,
-    add_io_arguments,
+    WORK_DIR,
     contents_path,
     read_jsonl,
-    resolve_io_paths,
 )
 from agent_memories.generalisation.post_processing import title_and_description
 from agent_memories.memory import Embedder, MemoryItem, MemoryStore
@@ -49,19 +46,10 @@ def run_store_write(
     return written
 
 
-def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    add_io_arguments(parser)
-    parser.add_argument(
-        "--shared-store",
-        type=Path,
-        default=DEFAULT_SHARED_STORE,
-        help=f"Shared MemoryStore JSONL (default: {DEFAULT_SHARED_STORE}).",
-    )
-    args = parser.parse_args(argv)
+def main() -> None:
     load_dotenv()
 
-    _, work_dir = resolve_io_paths(args)
+    work_dir = WORK_DIR
     records = read_jsonl(contents_path(work_dir))
     if not records:
         print(f"[Step 4] No content records in {contents_path(work_dir)}; nothing to write.")
@@ -72,14 +60,14 @@ def main(argv: list[str] | None = None) -> None:
     embedder = Embedder()
     written = run_store_write(
         records,
-        shared_path=args.shared_store,
+        shared_path=DEFAULT_SHARED_STORE,
         client=client,
         embedder=embedder,
     )
     for row in written:
         print(f"[Step 4] label={row['label']!r} title={row['title']!r}")
-    print(f"[Step 4] Wrote {len(written)} shared entries to {args.shared_store}")
+    print(f"[Step 4] Wrote {len(written)} shared entries to {DEFAULT_SHARED_STORE}")
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    main()

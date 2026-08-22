@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from agent_memories.agent.actions import ActionParseError, parse_action
+from agent_memories.agent.playwright.actions import ActionParseError, parse_action
 
 
 @pytest.mark.unit

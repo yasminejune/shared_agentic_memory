@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from agent_memories.agent.nodes import (
+from agent_memories.agent.constants import (
     DEFAULT_STUCK_THRESHOLD,
     MEMORY_INJECTION_INSTRUCTION,
     OBSERVATION_CHAR_BUDGET,

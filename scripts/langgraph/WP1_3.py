@@ -1,12 +1,8 @@
-"""WP1.3 / WP1.4 Observe-Think-Act on a live Chromium page.
+"""Observe-Think-Act on a live Chromium page.
 
-Think is an LLM (local Qwen via Ollama, or Mistral on the cloud).
-Stops on the model's ``stop`` action or ``--max-steps``. WP1.3 is the
-single-action grammar; WP1.4 is the multi-step loop. Both live here.
-
-Stdout is three prefixes only: ``[Observe]:``, ``[Think]:``, ``[Act]:``.
-The trajectory sits in ``state['history']`` and ``main`` returns it so
-a later memory pipeline can consume a finished run in-process.
+Think is an LLM (local Qwen via Ollama, or Mistral). Stops on the
+model's stop action or --max-steps. Stdout is [Observe]/[Think]/[Act]
+only. main returns the finished state, including history.
 """
 
 from __future__ import annotations
@@ -17,7 +13,8 @@ from dotenv import load_dotenv
 from playwright.sync_api import sync_playwright
 
 from agent_memories.agent import build_graph, new_state
-from agent_memories.agent.nodes import DEFAULT_STUCK_THRESHOLD, make_think
+from agent_memories.agent.constants import DEFAULT_STUCK_THRESHOLD
+from agent_memories.agent.playwright.nodes import make_think
 from agent_memories.agent.state import AgentState
 from agent_memories.config import load_random_seed
 from agent_memories.services.mistral_client import MistralClient

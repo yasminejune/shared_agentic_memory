@@ -1,5 +1,6 @@
 """State for one Observe-Think-Act run.
 
+is not dependent on the backend i.e. any Playwright or BrowserGym.
 history is the current trajectory. memories is the retrieved title/content
 items, empty when none were fetched.
 """

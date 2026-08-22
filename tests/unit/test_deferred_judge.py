@@ -77,9 +77,9 @@ def test_install_is_idempotent() -> None:
 
     fake_harness = types.ModuleType("webarena.evaluation_harness")
     fake_evaluators = types.ModuleType("webarena.evaluation_harness.evaluators")
-    fake_evaluators.llm_fuzzy_match = lambda p, r, q: 0.0  # type: ignore
-    fake_evaluators.llm_ua_match = lambda p, r, q: 0.0  # type: ignore
-    fake_harness.evaluators = fake_evaluators  # type: ignore
+    fake_evaluators.llm_fuzzy_match = lambda p, r, q: 0.0  # type: ignore[attr-defined]
+    fake_evaluators.llm_ua_match = lambda p, r, q: 0.0  # type: ignore[attr-defined]
+    fake_harness.evaluators = fake_evaluators  # type: ignore[attr-defined]
 
     saved = deferred_judge._installed
     try:
@@ -297,7 +297,7 @@ def test_append_judge_calls_record(tmp_path: Path) -> None:
     jsonl = tmp_path / "calls.jsonl"
     append_judge_calls_record(
         jsonl,
-        task_id=42,
+        task_id=137,
         intent="Find the price",
         run_status="ok",
         deferred_reward=1.0,
@@ -306,6 +306,6 @@ def test_append_judge_calls_record(tmp_path: Path) -> None:
     lines = jsonl.read_text(encoding="utf-8").strip().split("\n")
     assert len(lines) == 1
     record = json.loads(lines[0])
-    assert record["task_id"] == 42
+    assert record["task_id"] == 137
     assert record["deferred_reward"] == 1.0
     assert len(record["calls"]) == 1
