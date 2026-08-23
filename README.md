@@ -85,3 +85,20 @@ Runners load `.env` through `python-dotenv`. Only variables that the code actual
 - `WA_FULL_RESET` - if set, call `full_reset()` on the instance at batch start; otherwise `check_status()`. The spin-up notes set this to `http://localhost:7565`.
 
 TODO: `GITLAB_API_TOKEN` is in `.env.example` but is not read anywhere in the code.
+
+## Licence and third-party software
+
+GPL-3.0-only, see `LICENSE`. The licence is set by `invink`, which supplies the
+differential privacy primitives and is itself GPL-3.0.
+
+`THIRD_PARTY_NOTICES.md` records which parts come from `invink` and which are
+original, the Gemma 2 use terms, and the licences of the other dependencies.
+
+## Citing
+
+See `CITATION.cff`. Work that uses the differentially private generation should
+also cite the method it implements:
+
+> Vishnu Vinod, Krishna Pillutla and Abhradeep Guha Thakurta. InvisibleInk:
+> High-Utility and Low-Cost Text Generation with Differential Privacy. NeurIPS,
+> 2025. arXiv:2507.02974.
