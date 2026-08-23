@@ -265,4 +265,110 @@ When work is complete, tested, and squashed into a single commit:
 6. Tick **"Squash commits when merge request is accepted"** (safety net if not already squashed locally)
 7. Click **Create merge request**, then merge when ready
 
+
+---
+
+## Decision memory system
+
+This project maintains an automated log of durable design
+decisions at `.claude/memory/decisions.md`. The log is loaded
+into every Claude Code session via an import in `CLAUDE.md`,
+so any Claude (or human reading the file directly) starts with
+the project's current decisions in mind.
+
+### What goes in the log
+
+Architectural choices, library and dependency choices, API and
+data contracts, naming conventions, explicit behavioural rules,
+security and privacy constraints, deployment commitments.
+
+Excluded: implementation details, refactors, bug fixes, work in
+progress, the deliberation behind a decision.
+
+Each entry is a single declarative sentence stating the current
+decision. When a new decision supersedes an old one, the old
+entry is replaced, not appended to. The log is meant to be
+short.
+
+### How entries get added
+
+Two paths:
+
+1. Automatic: after every `git push` on a primary branch
+   (`main`, `master`, `develop`), a `PostToolUse` hook fires
+   the `decision-curator` skill in headless mode. It reads
+   commits since the last curated SHA, extracts decisions
+   using the rules above, reconciles them against the existing
+   log, and writes back.
+2. Manual: run `/note-decision <text>` inside Claude Code to
+   record a decision that did not arise from a commit (meeting
+   outcomes, constraints discovered while debugging, policy
+   choices). The slash command applies the same rules.
+
+Both paths log to `.claude/memory/curator.log`.
+
+### Files
+
+| Path | Purpose | Tracked in git? |
+|------|---------|-----------------|
+| `.claude/memory/decisions.md` | The decision log itself | yes |
+| `.claude/memory/.last-curated-sha` | Marker for the curator | no |
+| `.claude/memory/curator.log` | Run history of both skills | no |
+| `.claude/skills/decision-curator/SKILL.md` | The automatic curator | yes |
+| `.claude/skills/note-decision/SKILL.md` | The manual slash command | yes |
+| `.claude/settings.json` | The hook that triggers the curator | yes |
+| `CLAUDE.md` | Imports the decision log | yes |
+
+### Operating notes
+
+- The hook only fires when push is run from inside a Claude
+  Code session. Pushes from a plain terminal do not trigger
+  the curator.
+- The curator only runs on primary branches. Feature-branch
+  pushes are ignored on purpose.
+- The curator runs on Haiku to keep cost and latency bounded.
+- On force-push or rebase, the curator falls back to a recent
+  window and logs the fallback. Review the log after any
+  history rewrite.
+- If the curator fails, it never modifies `decisions.md` or
+  the marker; it only writes to the log. Check the log if a
+  decision you expected to appear did not.
+- Edits to `decisions.md` made by hand are preserved by the
+  curator's supersession logic, but if you restructure the
+  file (rename sections, remove the schema marker), the
+  curator will refuse to run until the schema is restored.
+- To rebuild the log from full history, delete
+  `.claude/memory/.last-curated-sha`, restore it to the SHA
+  you want to curate from (e.g. the first commit), and trigger
+  a push or run `claude -p 'Run the decision-curator skill now.'`
+  manually. Expect the 50-commit window to apply.
+
+---
+
+## Thesis task tracker
+
+Forward-looking task list for the MSc thesis lives at
+`.claude/thesis/tasks.md` and is curated via the
+`thesis-tasks` skill. Separate from the decision memory at
+`.claude/memory/decisions.md`: tasks are what is planned,
+decisions are what is settled.
+
+The tracker is not auto-loaded into every session. Invoke the
+skill explicitly or by mentioning the thesis, a work package,
+a task number, or a milestone, and Claude will read the file.
+
+Status markers: `[ ]` open, `[~]` in progress, `[x]` done,
+`[!]` blocked, `[-]` deferred or cancelled.
+
+To update a task, ask Claude to change its status. The skill
+will confirm the edit before writing.
+
+### Automated progress notes
+
+A second headless skill, `thesis-tasks-curator`, fires after every
+`git push` (incremental scan) and every `gh pr create` (branch-wide
+scan). It maps commit content to task numbers and appends dated
+`Progress (YYYY-MM-DD): <sha> "<subject>"` lines to matched tasks.
+It never changes status brackets — it only surfaces evidence for the
+user to act on. Run log: `.claude/thesis/curator.log`.
 ---
