@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import csv
 import json
-import sys
 from collections.abc import Callable
 from pathlib import Path
 from unittest.mock import patch
@@ -12,18 +11,13 @@ from unittest.mock import patch
 import pytest
 
 from agent_memories.agent.browsergym import deferred_judge
-from evaluation.webarena_judge.scorer import score_task
-
-_WEBARENA_DIR = Path(__file__).resolve().parent.parent.parent / "scripts" / "webarena"
-if str(_WEBARENA_DIR) not in sys.path:
-    sys.path.insert(0, str(_WEBARENA_DIR))
-
-from common import (  # noqa: E402
+from agent_memories.webarena.csv_io import (
     append_judge_calls_record,
     ensure_csv_header,
     judge_calls_path,
     judge_scores_path,
 )
+from evaluation.webarena.judge.scorer import score_task
 
 pytestmark = pytest.mark.unit
 
@@ -102,7 +96,7 @@ def test_score_task_single_correct() -> None:
     def fake_score(call):
         return 1.0, "scored"
 
-    with patch("evaluation.webarena_judge.scorer.score_single_call", side_effect=fake_score):
+    with patch("evaluation.webarena.judge.scorer.score_single_call", side_effect=fake_score):
         verdicts, product, final, success, status = score_task(
             calls, 1.0, max_retries=1, sleep_between=0
         )
@@ -119,7 +113,7 @@ def test_score_task_single_incorrect() -> None:
     def fake_score(call):
         return 0.0, "scored"
 
-    with patch("evaluation.webarena_judge.scorer.score_single_call", side_effect=fake_score):
+    with patch("evaluation.webarena.judge.scorer.score_single_call", side_effect=fake_score):
         verdicts, product, final, success, status = score_task(
             calls, 1.0, max_retries=1, sleep_between=0
         )
@@ -140,7 +134,7 @@ def test_score_task_multi_reference_product() -> None:
     def fake_score(call):
         return next(results)
 
-    with patch("evaluation.webarena_judge.scorer.score_single_call", side_effect=fake_score):
+    with patch("evaluation.webarena.judge.scorer.score_single_call", side_effect=fake_score):
         verdicts, product, final, success, status = score_task(
             calls, 1.0, max_retries=1, sleep_between=0
         )
@@ -155,7 +149,7 @@ def test_score_task_zero_deferred_reward_wins() -> None:
     def fake_score(call):
         return 1.0, "scored"
 
-    with patch("evaluation.webarena_judge.scorer.score_single_call", side_effect=fake_score):
+    with patch("evaluation.webarena.judge.scorer.score_single_call", side_effect=fake_score):
         verdicts, product, final, success, status = score_task(
             calls, 0.0, max_retries=1, sleep_between=0
         )
@@ -170,7 +164,7 @@ def test_score_task_unparseable_status() -> None:
     def fake_score(call):
         return 0.0, "unparseable"
 
-    with patch("evaluation.webarena_judge.scorer.score_single_call", side_effect=fake_score):
+    with patch("evaluation.webarena.judge.scorer.score_single_call", side_effect=fake_score):
         verdicts, product, final, success, status = score_task(
             calls, 1.0, max_retries=1, sleep_between=0
         )
@@ -188,8 +182,8 @@ def test_score_task_paces_between_calls() -> None:
         return next(results)
 
     with (
-        patch("evaluation.webarena_judge.scorer.score_single_call", side_effect=fake_score),
-        patch("evaluation.webarena_judge.scorer.time.sleep") as sleep_mock,
+        patch("evaluation.webarena.judge.scorer.score_single_call", side_effect=fake_score),
+        patch("evaluation.webarena.judge.scorer.time.sleep") as sleep_mock,
     ):
         score_task(calls, 1.0, max_retries=1, sleep_between=30.0)
 
@@ -210,9 +204,9 @@ def test_score_task_rate_limit_retry_waits_a_minute() -> None:
         return next(results)
 
     with (
-        patch("evaluation.webarena_judge.scorer.score_single_call", side_effect=fake_score),
-        patch("evaluation.webarena_judge.scorer.time.sleep") as sleep_mock,
-        patch("evaluation.webarena_judge.scorer.random.uniform", return_value=0.0),
+        patch("evaluation.webarena.judge.scorer.score_single_call", side_effect=fake_score),
+        patch("evaluation.webarena.judge.scorer.time.sleep") as sleep_mock,
+        patch("evaluation.webarena.judge.scorer.random.uniform", return_value=0.0),
     ):
         score_task(calls, 1.0, max_retries=3, sleep_between=1.0)
 

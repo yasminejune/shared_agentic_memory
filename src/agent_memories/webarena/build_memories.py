@@ -11,29 +11,30 @@ import json
 import sys
 from pathlib import Path
 
-_WEBARENA_DIR = Path(__file__).resolve().parent
-if str(_WEBARENA_DIR) not in sys.path:
-    sys.path.insert(0, str(_WEBARENA_DIR))
+from dotenv import load_dotenv
 
-from common import (
+from agent_memories.config import load_random_seed, set_global_seed
+from agent_memories.memory import Embedder, MemoryStore
+
+# Off .pipeline rather than the package: the lazy __getattr__ on
+# agent_memories.memory hides the type from mypy.
+from agent_memories.memory.pipeline import MemoryBuildResult, MemoryPipeline
+from agent_memories.services.ollama_client import OllamaClient
+from agent_memories.types import ChatClient
+from agent_memories.webarena.constants import (
     DEFAULT_MEMORIES_CSV,
     DEFAULT_TRAJECTORIES_CSV,
     MEMORY_CSV_COLUMNS,
     QWEN_MODEL,
     WEBARENA_USER_ID,
+)
+from agent_memories.webarena.csv_io import (
     append_csv_row,
     ensure_csv_header,
     load_memory_built_task_ids,
-    require_ollama_model,
-    state_from_trajectory_row,
 )
-from dotenv import load_dotenv
-
-from agent_memories.config import load_random_seed, set_global_seed
-from agent_memories.memory import Embedder, MemoryPipeline, MemoryStore
-from agent_memories.memory.pipeline import MemoryBuildResult
-from agent_memories.services.ollama_client import OllamaClient
-from agent_memories.types import ChatClient
+from agent_memories.webarena.preflight import require_ollama_model
+from agent_memories.webarena.trajectories import state_from_trajectory_row
 
 
 def _build_client(seed: int) -> ChatClient:

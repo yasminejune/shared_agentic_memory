@@ -6,7 +6,7 @@ Implementation of shared memories for LLM-based web agents: a LangGraph Observe-
 
 - Python 3.10 or later (`requires-python` in `pyproject.toml`).
 - A local Ollama server on `http://localhost:11434` with `qwen3.5:4b-nvfp4` pulled. That is the default Think model in the agent and WebArena runners. `make install` does not install Ollama.
-- A running WebArena instance for anything under `scripts/webarena/`. Those scripts exit if the `WA_*` site URLs are missing. Docker, webarena-setup, the localhost URL template, and the status check are in `scripts/webarena/instructions_spinup.txt`.
+- A running WebArena instance for the `webarena-*` commands. They exit if the `WA_*` site URLs are missing. Docker, webarena-setup, the localhost URL template, and the status check are in `docs/webarena_spinup.md`.
 - HuggingFace access to `google/gemma-2-2b-it` for the InvisibleInk generalisation steps (labels and shared content).
 - A Mistral API key if you pass `--model mistral` or run the deferred WebArena judge.
 
@@ -45,7 +45,7 @@ venv/bin/python scripts/memories/WP1_5.py --model qwen --k 1
 WebArena batch runs (tasks 0-811 by default). Needs the `WA_*` URLs, Ollama, and `RANDOM_SEED`:
 
 ```bash
-venv/bin/python scripts/webarena/run_webarena.py --condition A --start-id 0 --end-id 0
+venv/bin/webarena-run --condition A --start-id 0 --end-id 0
 ```
 
 `--condition` picks the memory condition: `A` no memories, `B` private, `C` shared,
@@ -55,8 +55,24 @@ memories are retrieved (default 3, ignored by `A`). After a run, score deferred
 judge calls with:
 
 ```bash
-venv/bin/python scripts/webarena/score_deferred_judge.py --calls <calls.jsonl>
+venv/bin/webarena-score-judge --calls <calls.jsonl>
 ```
+
+Then compare the four conditions on the 812-task success rate:
+
+```bash
+venv/bin/webarena-compare
+```
+
+The four WebArena commands are declared in `[project.scripts]` and installed by
+`make install`. Each is also runnable as a module, which needs no reinstall:
+
+| Command | Module |
+| --- | --- |
+| `webarena-run` | `evaluation.webarena.run` |
+| `webarena-score-judge` | `evaluation.webarena.judge.deferred` |
+| `webarena-compare` | `evaluation.webarena.compare` |
+| `webarena-build-memories` | `agent_memories.webarena.build_memories` |
 
 InvisibleInk shared-memory pipeline (steps 1-4, in order):
 
@@ -67,8 +83,8 @@ venv/bin/python -m agent_memories.generalisation.run
 ## Project layout
 
 - `src/agent_memories/` - agent graph, memory store, InvisibleInk generalisation, LLM clients.
-- `scripts/` - runners: `langgraph/`, `memories/`, `webarena/`, plus `amin_et_al/` for the DP experiments.
-- `evaluation/` - deferred WebArena judge scorer and task-summary helpers.
+- `scripts/` - exploratory experiments: `langgraph/`, `memories/`, `labels/`, plus `amin_et_al/` for the DP experiments.
+- `evaluation/` - the WebArena harness: condition runner, deferred judge, condition comparison.
 - `tests/` - pytest suite (`unit/` and `integration/`).
 - `data/` - runtime outputs (`memories/`, `webarena/`); both are gitignored.
 - `docs/CODING_STANDARDS.md` - local setup notes, including Ollama.
@@ -81,7 +97,7 @@ Runners load `.env` through `python-dotenv`. Only variables that the code actual
 - `GEMMA_ACCESS_TOKEN` - HuggingFace login for `google/gemma-2-2b-it`.
 - `RANDOM_SEED` - integer seed for agent and evaluation scripts. Missing or non-integer values fail the run.
 - `AGENT_MEMORY_USER_ID` - default simulated user id (`user_a` if unset).
-- `WA_SHOPPING`, `WA_SHOPPING_ADMIN`, `WA_REDDIT`, `WA_GITLAB`, `WA_WIKIPEDIA`, `WA_MAP`, `WA_HOMEPAGE` - local WebArena site origins. Required by the batch runners. Localhost ports are in `scripts/webarena/instructions_spinup.txt`.
+- `WA_SHOPPING`, `WA_SHOPPING_ADMIN`, `WA_REDDIT`, `WA_GITLAB`, `WA_WIKIPEDIA`, `WA_MAP`, `WA_HOMEPAGE` - local WebArena site origins. Required by the batch runners. Localhost ports are in `docs/webarena_spinup.md`.
 - `WA_FULL_RESET` - if set, call `full_reset()` on the instance at batch start; otherwise `check_status()`. The spin-up notes set this to `http://localhost:7565`.
 
 TODO: `GITLAB_API_TOKEN` is in `.env.example` but is not read anywhere in the code.

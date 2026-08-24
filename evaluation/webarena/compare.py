@@ -12,20 +12,15 @@ from collections import Counter
 from collections.abc import Sequence
 from pathlib import Path
 
-from agent_memories.config import DEFAULT_MEMORY_DIR, REPO_ROOT
+from agent_memories.webarena.constants import (
+    CONDITION_CSVS,
+    DEFAULT_MEMORIES_CSV,
+    DEFAULT_SHARED_STORE,
+    N_TASKS,
+    WEBARENA_DATA_DIR,
+)
+from agent_memories.webarena.csv_io import judge_scores_path
 
-N_TASKS = 812
-PRIVATE_MEMORIES_CSV = (
-    REPO_ROOT / "data" / "webarena" / "trajectories_reasoningbank_private_memories.csv"
-)
-SHARED_STORE = DEFAULT_MEMORY_DIR / "shared.jsonl"
-OUT_DIR = REPO_ROOT / "data" / "webarena"
-CONDITION_CSVS = (
-    ("A", OUT_DIR / "trajectories_A_no_memories.csv"),
-    ("B", OUT_DIR / "trajectories_B_private_run.csv"),
-    ("C", OUT_DIR / "trajectories_C_shared_only.csv"),
-    ("D", OUT_DIR / "trajectories_D_private_shared.csv"),
-)
 TERMINAL_CONTENT_CHARS = 120
 
 SUMMARY_COLUMNS = [
@@ -55,10 +50,6 @@ def _parse_json_list(raw: str | None) -> list:
     if not isinstance(parsed, list):
         return []
     return parsed
-
-
-def judge_scores_path(csv_path: Path) -> Path:
-    return csv_path.with_name(csv_path.stem + "_judge_scores.csv")
 
 
 def load_csv_rows(path: Path) -> list[dict[str, str]]:
@@ -317,7 +308,7 @@ def main() -> None:
         loaded[name] = rows_by_task
         summary_rows.append(summarise_condition(name, rows_by_task, scores))
 
-    out_dir = OUT_DIR
+    out_dir = WEBARENA_DATA_DIR
     summary_path = out_dir / "condition_comparison.csv"
     write_csv(summary_path, SUMMARY_COLUMNS, summary_rows)
     print_table(
@@ -327,10 +318,10 @@ def main() -> None:
     )
     print(f"\nWrote {summary_path}")
 
-    if not PRIVATE_MEMORIES_CSV.exists():
-        print(f"Private memories CSV not found: {PRIVATE_MEMORIES_CSV}", file=sys.stderr)
+    if not DEFAULT_MEMORIES_CSV.exists():
+        print(f"Private memories CSV not found: {DEFAULT_MEMORIES_CSV}", file=sys.stderr)
         sys.exit(1)
-    items_by_task = load_private_memory_items(PRIVATE_MEMORIES_CSV)
+    items_by_task = load_private_memory_items(DEFAULT_MEMORIES_CSV)
     memory_rows = count_b_pulls(loaded["B"], items_by_task)
     mem_path = out_dir / "condition_comparison_memories_B.csv"
     write_csv(mem_path, MEMORY_COLUMNS, memory_rows)
@@ -341,10 +332,10 @@ def main() -> None:
     )
     print(f"\nWrote {mem_path} ({len(memory_rows)} distinct items)")
 
-    if not SHARED_STORE.exists():
-        print(f"Shared store not found: {SHARED_STORE}", file=sys.stderr)
+    if not DEFAULT_SHARED_STORE.exists():
+        print(f"Shared store not found: {DEFAULT_SHARED_STORE}", file=sys.stderr)
         sys.exit(1)
-    shared_items = load_shared_items(SHARED_STORE)
+    shared_items = load_shared_items(DEFAULT_SHARED_STORE)
     memory_rows = count_c_pulls(loaded["C"], shared_items)
     mem_path = out_dir / "condition_comparison_memories_C.csv"
     write_csv(mem_path, MEMORY_COLUMNS, memory_rows)

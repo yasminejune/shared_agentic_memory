@@ -17,11 +17,18 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-_WEBARENA_DIR = Path(__file__).resolve().parent
-if str(_WEBARENA_DIR) not in sys.path:
-    sys.path.insert(0, str(_WEBARENA_DIR))
+from dotenv import load_dotenv
 
-from common import (
+from agent_memories.agent.browsergym import deferred_judge
+from agent_memories.agent.browsergym.env import WebArenaEnvWrapper, make_webarena_env
+from agent_memories.agent.browsergym.graph import build_graph
+from agent_memories.agent.browsergym.nodes import extract_bot_response, make_think
+from agent_memories.agent.constants import OBSERVATION_CHAR_BUDGET
+from agent_memories.agent.state import AgentState, new_state
+from agent_memories.config import load_random_seed, set_global_seed
+from agent_memories.services.ollama_client import OllamaClient
+from agent_memories.types import ChatClient
+from agent_memories.webarena.constants import (
     DEFAULT_INFRA_LOG,
     DEFAULT_MAX_STEPS,
     DEFAULT_MEMORIES_CSV,
@@ -36,37 +43,32 @@ from common import (
     RUN_STATUS_OK,
     THINK_REQUEST_TIMEOUT_SECONDS,
     TRAJECTORY_CSV_COLUMNS,
-    MemoryIndex,
-    MemoryRecord,
+)
+from agent_memories.webarena.csv_io import (
     append_csv_row,
     append_judge_calls_record,
-    audit_ids,
     ensure_csv_header,
-    flatten_records_for_think,
-    is_infra_error,
     judge_calls_path,
-    load_intent_template_ids,
     load_ok_task_ids,
-    load_private_records,
-    load_shared_records,
+)
+from agent_memories.webarena.preflight import (
+    is_infra_error,
     log_infra_error,
     prepare_webarena,
     require_nltk_punkt_tab,
     require_ollama_model,
     require_wa_env_vars,
-    truncate_observation,
 )
-from dotenv import load_dotenv
-
-from agent_memories.agent.browsergym import deferred_judge
-from agent_memories.agent.browsergym.env import WebArenaEnvWrapper, make_webarena_env
-from agent_memories.agent.browsergym.graph import build_graph
-from agent_memories.agent.browsergym.nodes import extract_bot_response, make_think
-from agent_memories.agent.constants import OBSERVATION_CHAR_BUDGET
-from agent_memories.agent.state import AgentState, new_state
-from agent_memories.config import load_random_seed, set_global_seed
-from agent_memories.services.ollama_client import OllamaClient
-from agent_memories.types import ChatClient
+from agent_memories.webarena.records import (
+    MemoryIndex,
+    MemoryRecord,
+    audit_ids,
+    flatten_records_for_think,
+    load_private_records,
+    load_shared_records,
+)
+from agent_memories.webarena.tasks import load_intent_template_ids
+from agent_memories.webarena.trajectories import truncate_observation
 
 DEFAULT_K = 3
 
@@ -337,8 +339,7 @@ def main(argv: list[str] | None = None) -> None:
         n = sum(1 for _ in calls_file.open("r", encoding="utf-8"))
         print(
             f"[Runner] {n} tasks awaiting LLM judge. Next:\n"
-            f"  python scripts/webarena/score_deferred_judge.py "
-            f"--calls {calls_file}",
+            f"  webarena-score-judge --calls {calls_file}",
             flush=True,
         )
 

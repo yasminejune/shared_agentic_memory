@@ -8,7 +8,6 @@ and in particular that user_b retrieves what user_a wrote.
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
@@ -17,18 +16,13 @@ from agent_memories.agent.browsergym.nodes import make_think
 from agent_memories.agent.state import AgentState, new_state
 from agent_memories.memory.pipeline import MemoryPipeline
 from agent_memories.memory.store import MemoryStore
-from tests.conftest import FakeChatClient, FakeEmbedder
-
-_WEBARENA_DIR = Path(__file__).resolve().parents[2] / "scripts" / "webarena"
-if str(_WEBARENA_DIR) not in sys.path:
-    sys.path.insert(0, str(_WEBARENA_DIR))
-
-from common import (  # noqa: E402
+from agent_memories.webarena.records import (
     MemoryIndex,
     audit_ids,
     flatten_records_for_think,
     load_shared_records,
 )
+from tests.conftest import FakeChatClient, FakeEmbedder
 
 pytestmark = pytest.mark.integration
 

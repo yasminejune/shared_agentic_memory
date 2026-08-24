@@ -13,16 +13,12 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-_WEBARENA_DIR = Path(__file__).resolve().parent
-if str(_WEBARENA_DIR) not in sys.path:
-    sys.path.insert(0, str(_WEBARENA_DIR))
-
-from common import require_wa_env_vars
 from dotenv import load_dotenv
 
 from agent_memories.config import load_random_seed, set_global_seed
 from agent_memories.services.mistral_client import MistralClient
-from evaluation.webarena_judge.scorer import (
+from agent_memories.webarena.preflight import require_wa_env_vars
+from evaluation.webarena.judge.scorer import (
     JUDGE_MAX_TOKENS,
     JUDGE_MODEL,
     JUDGE_SCORES_COLUMNS,
