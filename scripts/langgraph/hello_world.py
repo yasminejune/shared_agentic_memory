@@ -1,3 +1,8 @@
+"""One-node LangGraph that replies hello world.
+
+First graph I compiled. Mock LLM, no tools, no browser.
+"""
+
 from langgraph.graph import END, START, MessagesState, StateGraph
 
 

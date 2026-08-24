@@ -1,30 +1,7 @@
-"""Action grammar, parser and dispatch for the Act node.
+"""Action set, parser, and dispatch for the Act node.
 
-Two routes coexist on purpose:
-
-* Selector-based actions (``{"type": "click", "selector": ...}`` etc.)
-  remain available so the WP1.1 and WP1.2 scripted-Think entry points
-  keep working unchanged.
-* ARIA-ref actions (``{"type": "click", "ref": "eN"}``) are what the
-  WP1.3 Mistral-driven Think emits, after running its single-line
-  response through ``parse_action``. The dispatcher resolves refs via
-  ``page.locator("aria-ref=eN")``, matching the snapshot contract in
-  ``observation.py``.
-
-The grammar the LLM is constrained to is intentionally small:
-
-    click [eN]
-    type [eN] "text"
-    enter
-    scroll up
-    scroll down
-    goto "url"
-    stop
-
-``enter`` presses the Enter key globally; in practice this submits the
-input the agent just filled, because ``type`` leaves that element
-focused. ``stop`` is consumed by Think (it flips ``done``) and never
-reaches the dispatcher.
+Selector-based actions serve the scripted Think path; ARIA-ref actions
+are what the LLM emits. stop is consumed by Think, not the dispatcher.
 """
 
 from __future__ import annotations
@@ -36,7 +13,7 @@ from playwright.sync_api import Page
 
 
 class UnknownActionError(ValueError):
-    """Raised when an action's ``type`` is not in the supported set."""
+    """Raised when an action's type is not in the supported set."""
 
 
 class ActionParseError(ValueError):
@@ -52,7 +29,7 @@ _GOTO_RE = re.compile(r'^goto\s+"((?:[^"\\]|\\.)*)"$')
 def parse_action(line: str) -> dict[str, Any]:
     """Parse a single grammar line into an action dictionary.
 
-    Accepted forms (with ``N`` a positive integer):
+    Accepted forms:
 
     * ``click [eN]``        -> ``{"type": "click", "ref": "eN"}``
     * ``type [eN] "text"``  -> ``{"type": "fill",  "ref": "eN", "value": "text"}``
@@ -62,9 +39,7 @@ def parse_action(line: str) -> dict[str, Any]:
     * ``goto "url"``        -> ``{"type": "goto", "url": "url"}``
     * ``stop``              -> ``{"type": "stop"}``
 
-    Anything else raises :class:`ActionParseError`. The whole input
-    must be exactly one line; surrounding whitespace is tolerated but
-    embedded newlines are not.
+    Surrounding whitespace is tolerated; embedded newlines are not.
     """
     if line is None:
         raise ActionParseError("Action line was None")
@@ -105,11 +80,10 @@ def _unescape(raw: str) -> str:
 
 
 def dispatch(page: Page, action: dict[str, Any]) -> None:
-    """Execute ``action`` against ``page``.
+    """Execute action against page.
 
-    Actions may target an element by selector (legacy scripted-Think
-    path) or by ARIA ref (WP1.3 LLM path). ``stop`` is handled by the
-    Think node and must never reach this function.
+    Targets by selector (scripted Think) or ARIA ref (LLM Think). stop
+    must not reach this function.
     """
     kind = action.get("type")
     if kind == "goto":

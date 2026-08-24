@@ -1,11 +1,6 @@
-"""WP3.2 — Build ReasoningBank memories from WebArena trajectory CSV rows.
+"""Build ReasoningBank memories from a WebArena trajectory CSV.
 
-Reads ``data/webarena/trajectories.csv`` (produced by ``run_webarena.py``)
-and writes judge outcomes, extracted memory items, and embeddings to
-``data/webarena/trajectories_memories.csv``.
-
-Resume skips task_ids already present in the output CSV with a non-empty
-``judge_outcome``.
+Output: data/webarena/trajectories_memories.csv
 """
 
 from __future__ import annotations
@@ -34,14 +29,15 @@ from common import (
 )
 from dotenv import load_dotenv
 
+from agent_memories.config import load_random_seed, set_global_seed
 from agent_memories.memory import Embedder, MemoryPipeline, MemoryStore
 from agent_memories.memory.pipeline import MemoryBuildResult
 from agent_memories.services.ollama_client import OllamaClient
 from agent_memories.types import ChatClient
 
 
-def _build_client() -> ChatClient:
-    return OllamaClient(model=QWEN_MODEL)
+def _build_client(seed: int) -> ChatClient:
+    return OllamaClient(model=QWEN_MODEL, seed=seed)
 
 
 def _load_trajectory_rows(
@@ -120,44 +116,35 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--start-id", type=int, default=0)
     parser.add_argument("--end-id", type=int, default=811)
-    parser.add_argument(
-        "--trajectories-csv",
-        type=Path,
-        default=DEFAULT_TRAJECTORIES_CSV,
-        help="Input trajectories CSV from run_webarena.py",
-    )
-    parser.add_argument(
-        "--output-csv",
-        type=Path,
-        default=DEFAULT_MEMORIES_CSV,
-        help="Append-only memories CSV output path",
-    )
     args = parser.parse_args(argv)
 
     load_dotenv()
+    seed = load_random_seed()
+    set_global_seed(seed)
+    print(f"[Memory] random_seed={seed}", flush=True)
     require_ollama_model(QWEN_MODEL)
 
-    built_task_ids = load_memory_built_task_ids(args.output_csv)
-    ensure_csv_header(args.output_csv, MEMORY_CSV_COLUMNS)
+    built_task_ids = load_memory_built_task_ids(DEFAULT_MEMORIES_CSV)
+    ensure_csv_header(DEFAULT_MEMORIES_CSV, MEMORY_CSV_COLUMNS)
 
-    client = _build_client()
+    client = _build_client(seed)
     embedder = Embedder()
     throwaway_store = MemoryStore.load(
-        args.output_csv.parent / ".throwaway_memories.jsonl",
+        DEFAULT_MEMORIES_CSV.parent / ".throwaway_memories.jsonl",
         user_id=WEBARENA_USER_ID,
         embedder=embedder,
     )
     pipeline = MemoryPipeline(client=client, store=throwaway_store)
 
     trajectory_rows = _load_trajectory_rows(
-        args.trajectories_csv,
+        DEFAULT_TRAJECTORIES_CSV,
         start_id=args.start_id,
         end_id=args.end_id,
     )
     if not trajectory_rows:
         print(
             f"[Memory] No trajectory rows in [{args.start_id}, {args.end_id}] "
-            f"from {args.trajectories_csv}",
+            f"from {DEFAULT_TRAJECTORIES_CSV}",
             flush=True,
         )
         return
@@ -175,7 +162,7 @@ def main(argv: list[str] | None = None) -> None:
             embedder=embedder,
         )
         _write_memory_row(
-            csv_path=args.output_csv,
+            csv_path=DEFAULT_MEMORIES_CSV,
             trajectory_row=row,
             build_result=build_result,
         )
@@ -185,7 +172,7 @@ def main(argv: list[str] | None = None) -> None:
             flush=True,
         )
 
-    print(f"[Memory] Done. Output at {args.output_csv}", flush=True)
+    print(f"[Memory] Done. Output at {DEFAULT_MEMORIES_CSV}", flush=True)
 
 
 if __name__ == "__main__":

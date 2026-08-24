@@ -1,11 +1,11 @@
-"""Factory functions for BrowserGym-backed LangGraph nodes."""
+"""The three nodes for the ReAct loop in the BrowserGym WebArena."""
 
 from __future__ import annotations
 
 from collections.abc import Callable
 from typing import Any
 
-from agent_memories.agent.nodes import (
+from agent_memories.agent.constants import (
     DEFAULT_STUCK_THRESHOLD,
     MEMORY_INJECTION_INSTRUCTION,
     OBSERVATION_CHAR_BUDGET,
@@ -13,20 +13,22 @@ from agent_memories.agent.nodes import (
 from agent_memories.agent.state import AgentState
 from agent_memories.types import ChatClient
 
-from .actions import ActionParseError, parse_action
+from .actions import ActionParseError, extract_action_line, parse_action
 from .env import THINK_SYSTEM_PROMPT, WebArenaEnvWrapper
 
 NodeFn = Callable[[AgentState], AgentState]
 
-THINK_MAX_TOKENS = 256
+# Qwen with think=True returns the reasoning trace plus the action line.
+THINK_MAX_TOKENS = 1024
 
 
 def _trace(line: str) -> None:
     print(line, flush=True)
 
 
+# Observe node
 def make_observe(wrapper: WebArenaEnvWrapper) -> NodeFn:
-    """Read the latest preprocessed observation from the env wrapper."""
+    """Copy url, title, and tree_yaml from the wrapper's last observation."""
 
     def observe(state: AgentState) -> AgentState:
         obs = wrapper.last_obs
@@ -47,12 +49,13 @@ def make_observe(wrapper: WebArenaEnvWrapper) -> NodeFn:
     return observe
 
 
+# Think node
 def make_think(
     client: ChatClient,
     *,
     stuck_threshold: int = DEFAULT_STUCK_THRESHOLD,
 ) -> NodeFn:
-    """LLM Think node emitting one BrowserGym action string per turn."""
+    """Call Qwen to generate a thought, then parse one BrowserGym action line from the reply."""
 
     def think(state: AgentState) -> AgentState:
         if _is_stuck(state["history"], stuck_threshold):
@@ -63,32 +66,30 @@ def make_think(
         _trace(f"[Think]: {raw}")
 
         try:
-            action_str = parse_action(raw)
+            action_str = parse_action(extract_action_line(raw))
         except ActionParseError as exc:
             return _record_think_failure(state, raw=raw, outcome=f"parse_failure: {exc}")
 
         return {
             **state,
-            "thought": raw,
+            "thought": action_str,
             "action": {"type": "browsergym", "string": action_str},
         }
 
     return think
 
 
+# Act node
 def make_act(wrapper: WebArenaEnvWrapper) -> NodeFn:
-    """Execute a BrowserGym action via ``env.step``."""
+    """Take the action proposed by the thought node"""
 
     def act(state: AgentState) -> AgentState:
         action_obj = state.get("action", {})
         action_str = action_obj.get("string", "") if isinstance(action_obj, dict) else ""
-        try:
-            wrapper.step(action_str)
-            outcome = "ok"
-            if wrapper.last_obs.get("last_action_error"):
-                outcome = f"error: {wrapper.last_obs['last_action_error']}"
-        except Exception as exc:
-            outcome = f"error: {type(exc).__name__}: {exc}"
+        wrapper.step(action_str)
+        outcome = "ok"
+        if wrapper.last_obs.get("last_action_error"):
+            outcome = f"error: {wrapper.last_obs['last_action_error']}"
 
         _trace(f"[Act]: {action_str} -> {outcome}")
         record = {
@@ -114,12 +115,12 @@ def _is_stuck(history: list[dict[str, Any]], threshold: int) -> bool:
         return False
     tail = history[-threshold:]
     first_thought = tail[0].get("thought", "")
-    if not first_thought:
-        return False
+    # Repeated empty replies (think budget never reached content) also abort.
     return all(r.get("thought", "") == first_thought for r in tail)
 
 
 def _record_stuck_abort(state: AgentState, *, threshold: int) -> AgentState:
+    """Abort the loop if the agent has attempted to repeat the same action too many times"""
     _trace(f"[Think]: (stuck-detector aborted run after {threshold} identical replies)")
     record = {
         "step": state["step"],
@@ -137,6 +138,7 @@ def _record_stuck_abort(state: AgentState, *, threshold: int) -> AgentState:
 
 
 def _record_think_failure(state: AgentState, *, raw: str, outcome: str) -> AgentState:
+    """If unable to think, record the failure and continue."""
     record = {
         "step": state["step"],
         "thought": raw,
@@ -153,6 +155,7 @@ def _record_think_failure(state: AgentState, *, raw: str, outcome: str) -> Agent
 
 
 def _build_user_prompt(state: AgentState) -> str:
+    """Build the user prompt for the think node."""
     tree_yaml = state.get("observation", {}).get("tree_yaml", "")
     capped_tree = _truncate_observation(tree_yaml, OBSERVATION_CHAR_BUDGET)
     sections: list[str] = [f"Aim: {state['aim']}"]
@@ -175,6 +178,7 @@ def _build_user_prompt(state: AgentState) -> str:
 
 
 def _format_memories(memories: list[dict[str, str]]) -> str:
+    """Format the memories for the think node. Only include the title and content."""
     rendered: list[str] = []
     for item in memories:
         title = item.get("title", "").strip()
@@ -192,6 +196,7 @@ def _truncate_observation(tree_yaml: str, budget: int) -> str:
 
 
 def _format_history(history: list[dict[str, Any]]) -> str:
+    """Format the history for the think node."""
     if not history:
         return "(no prior steps)"
     lines = []
@@ -204,7 +209,7 @@ def _format_history(history: list[dict[str, Any]]) -> str:
 
 
 def extract_bot_response(state: AgentState) -> str:
-    """Return the last ``send_msg_to_user`` / ``report_infeasible`` answer if any."""
+    """Last send_msg_to_user text, or N/A if the run ended with report_infeasible."""
     for record in reversed(state.get("history", [])):
         action = record.get("action", "")
         if not isinstance(action, str):
@@ -217,6 +222,7 @@ def extract_bot_response(state: AgentState) -> str:
 
 
 def _extract_string_arg(call: str, func_name: str) -> str:
+    """Extract the string argument from the call to the function."""
     prefix = f"{func_name}("
     if not call.startswith(prefix) or not call.endswith(")"):
         return "N/A"

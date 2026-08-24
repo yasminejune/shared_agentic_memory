@@ -1,17 +1,14 @@
-"""Smoke harness for ``MemoryPipeline.create_from_run``.
+"""Smoke test for MemoryPipeline.create_from_run.
 
-Runs the WP1.6 ReasoningBank pipeline against a handful of hand-crafted
-fake ``AgentState`` scenarios and prints the resulting :class:`MemoryEntry`
-(or ``None`` when the extractor parsed zero items). Useful for
-verifying that the judge correctly labels successes and failures and
-that the extractor produces well-formed markdown blocks against
+Feeds a few hand-written AgentState scenarios through the ReasoningBank
+extractor and prints whatever MemoryEntry comes back (or None if the
+parser got zero items). I use this to check that the judge labels
+success vs failure correctly, and that the markdown blocks parse under
 local Qwen and remote Mistral.
 
-The script writes every store into a fresh :class:`tempfile.TemporaryDirectory`
-so the user's real ``data/memories/`` is untouched. Exit code is ``0``
-when at least one scenario produced a memory entry, ``1`` when every
-scenario returned ``None`` (likely indicates a broken prompt or
-parser).
+Each store lands in a TemporaryDirectory so data/memories/ is left
+alone. Exit 0 if at least one scenario produced an entry; 1 if they
+all came back None (usually a broken prompt or parser).
 
 Usage:
     python scripts/memories/memory_creation.py
@@ -28,6 +25,7 @@ from typing import Any
 from dotenv import load_dotenv
 
 from agent_memories.agent.state import AgentState, new_state
+from agent_memories.config import load_random_seed
 from agent_memories.memory import Embedder, MemoryPipeline, MemoryStore
 from agent_memories.services.mistral_client import MistralClient
 from agent_memories.services.ollama_client import OllamaClient
@@ -37,9 +35,9 @@ QWEN_MODEL = "qwen3.5:4b-nvfp4"
 MISTRAL_MODEL = "mistral-small-latest"
 
 
-def _build_client(name: str) -> ChatClient:
+def _build_client(name: str, seed: int) -> ChatClient:
     if name == "qwen":
-        return OllamaClient(model=QWEN_MODEL)
+        return OllamaClient(model=QWEN_MODEL, seed=seed)
     return MistralClient(model=MISTRAL_MODEL)
 
 
@@ -50,7 +48,7 @@ def _make_state(
     history: list[dict[str, Any]],
     steps: int,
 ) -> AgentState:
-    """Wrap a fake history into a terminal :class:`AgentState`."""
+    """Wrap a fake history into a terminal AgentState."""
     state = new_state(aim=aim)
     state["url"] = url
     state["history"] = history
@@ -60,7 +58,7 @@ def _make_state(
 
 
 def _scenario_stuck_parse_failure() -> tuple[str, AgentState]:
-    """The model emits a two-line ``type ... \\n enter`` reply five times."""
+    """Stuck run: the model emits ``type ...`` then ``enter`` five times."""
     bad_reply = 'type [e34] "paper"\nenter'
     history: list[dict[str, Any]] = [
         {
@@ -89,7 +87,7 @@ def _scenario_stuck_parse_failure() -> tuple[str, AgentState]:
 
 
 def _scenario_stuck_repeated_click() -> tuple[str, AgentState]:
-    """The model fires the same valid click five times on an unchanging page."""
+    """Stuck run: same valid click, five times, page never changes."""
     history: list[dict[str, Any]] = [
         {
             "step": i,
@@ -117,7 +115,7 @@ def _scenario_stuck_repeated_click() -> tuple[str, AgentState]:
 
 
 def _scenario_successful_search() -> tuple[str, AgentState]:
-    """Clean three-step Amazon search that ends with ``stop``."""
+    """Happy path: three-step Amazon search, then ``stop``."""
     history: list[dict[str, Any]] = [
         {
             "step": 0,
@@ -167,7 +165,7 @@ def main(argv: list[str] | None = None) -> int:
 
     load_dotenv()
     embedder = Embedder()
-    client = _build_client(args.model)
+    client = _build_client(args.model, load_random_seed())
 
     results: list[tuple[str, str | None]] = []
 

@@ -1,35 +1,11 @@
-"""Compare batch JSON vs paper-faithful sequential label generation under DP.
+"""Batch JSON vs sequential EOS label generation under Amin DP.
 
-Runs two label-generation strategies on the same toy memories with
-the same Amin et al. privacy hyperparameters and the same private-token
-budget ``r``, swapping only the generation mode:
+Same toy memories and the same private-token budget r. json_batch is one
+generate call asking for a JSON array. sequential_eos follows Amin
+Algorithm 1's nested loop and stops after k sequences.
 
-* ``json_batch`` — one :func:`agent_memories.agent.privacy.generate`
-  call with the frozen :data:`JSON_SPECIFIC_PROMPT` template (same as
-  ``json_specific`` in :mod:`scripts.amin_et_al.compare_label_prompts`),
-  asking for ``k`` labels in a single JSON array, then
-  :func:`parse_json`.
-* ``sequential_eos`` — Amin et al. Algorithm 1 lines 4–20:
-  outer ``while t < r``, inner ``while x`` does not end with ``<eos>``,
-  then ``X ← X ∪ {x}``. The harness stops after ``k`` sequences (not
-  the full ``r`` budget), caps total tokens at ``k * 3``, reuses the
-  prompt KV cache across sequences, and compares the first ``k``
-  sequences from ``X`` against the batch JSON output.
-
-Fairness controls: privacy hyperparameters (``s``, ``c``, ``tau``,
-``tau_public``, ``sigma``, ``theta``) match
-:mod:`scripts.amin_et_al.compare_label_prompts`; ``r`` is computed once
-from ``--epsilon`` (via :func:`solve_r`) or supplied via ``--r`` and
-reused across both modes. Epsilon is bounded on ``r`` (Theorem 1), not
-on tokens actually spent.
-
-Output file
-``scripts/amin_et_al/outputs/label_generation_mode_comparison.jsonl``
-is overwritten on every invocation (one JSONL record per
-(mode, run)).
-
-This script is a comparison harness only; it does not promote either
-mode into production.
+Writes scripts/amin_et_al/outputs/label_generation_mode_comparison.jsonl.
+Harness only.
 """
 
 from __future__ import annotations
@@ -47,27 +23,27 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from agent_memories.agent.privacy import (
+from agent_memories.agent.amin_et_al import (
     check_delta,
     epsilon_from_rho,
     generate,
     rho_for,
     solve_r,
 )
-from agent_memories.agent.privacy import token_generation as tg
-from agent_memories.agent.privacy.privacy_accounting import PrivacyAccount
-from agent_memories.agent.privacy.privatisation import (
+from agent_memories.agent.amin_et_al.accounting import PrivacyAccount
+from agent_memories.agent.amin_et_al.privatisation import (
     sample_private,
     sample_public,
     softmax_l1_distance,
 )
+from agent_memories.agent.lm import token_generation as tg
 
-S = 100  # batch size (100 examples)
+S = 100  # expected Amin batch size, not the toy CSV row count
 C = 50.0  # logit clip
 TAU = 1.0  # private temperature
 TAU_PUBLIC = 1.5  # public temperature
-SIGMA = 0.1  # SVT noise scale (matches WP2_8.py rationale)
-THETA = 0.0  # SVT threshold (matches WP2_8.py rationale)
+SIGMA = 0.1  # SVT noise scale (same as WP2_8.py)
+THETA = 0.0  # SVT threshold (same as WP2_8.py)
 R_MAX = 80  # cap passed to solve_r
 EPSILON_DEFAULT = 200.0
 K_DEFAULT = 3
@@ -81,7 +57,7 @@ OUTPUTS_PATH = Path("scripts/amin_et_al/outputs/label_generation_mode_comparison
 # Frozen snapshot of compare_label_prompts.JSON_SPECIFIC_PROMPT.
 JSON_SPECIFIC_PROMPT = (
     "Return exactly {k} labels, one of which must reflect the memory item below.\n"
-    "Each label must be 1–4 words.\n"
+    "Each label must be 1-4 words.\n"
     "Return only a JSON array of strings.\n"
     "No explanations, numbering, markdown, or extra text.\n"
     "\n"
@@ -94,8 +70,8 @@ JSON_SPECIFIC_PROMPT = (
 )
 
 SINGLE_SPECIFIC_PROMPT = (
-    "Return one short label (1–4 words) that reflects the memory items below.\n"
-    "Output only the label text — no JSON, numbering, markdown, or extra text.\n"
+    "Return one short label (1-4 words) that reflects the memory items below.\n"
+    "Output only the label text - no JSON, numbering, markdown, or extra text.\n"
     "\n"
     "Memory items:\n"
     "{items}"
@@ -105,22 +81,18 @@ _QUOTED_STRING = re.compile(r'"([^"\n]+)"')
 
 
 def wrap_json_specific(items: str = "(no examples)", *, k: int) -> str:
-    """Format :data:`JSON_SPECIFIC_PROMPT` for one batch member or SVT public."""
+    """Fill JSON_SPECIFIC_PROMPT for one batch member or the public prompt."""
     return JSON_SPECIFIC_PROMPT.format(k=k, items=items)
 
 
 def wrap_single_specific(items: str = "(no examples)", *, k: int) -> str:
-    """Format :data:`SINGLE_SPECIFIC_PROMPT` for one batch member or SVT public.
-
-    ``k`` is accepted for signature parity with other wrap functions but
-    does not appear in the prompt body.
-    """
+    """Fill SINGLE_SPECIFIC_PROMPT. k is unused (signature parity)."""
     del k
     return SINGLE_SPECIFIC_PROMPT.format(items=items)
 
 
 def parse_json(raw: str, k: int) -> list[tuple[str, bool]]:
-    """JSON-array parser with fallback layers, then ``label_<i>`` padding."""
+    """JSON-array parser with fallback layers, then label_<i> padding."""
     raw_stripped = raw.strip()
     candidates: list[str] = []
     for repair in ("", "]"):
@@ -153,7 +125,7 @@ def parse_single_label(raw: str) -> tuple[str, bool]:
 
 
 def parse_sequential_labels(raw_labels: list[str], k: int) -> list[tuple[str, bool]]:
-    """Take the first ``k`` sequences from ``X`` and pad if fewer were emitted."""
+    """Take the first k sequences from X and pad if fewer were emitted."""
     parsed: list[tuple[str, bool]] = []
     for raw in raw_labels[:k]:
         label, ok = parse_single_label(raw)
@@ -171,7 +143,7 @@ def _laplace(scale: float) -> float:
 
 
 def _sequence_ends_with_eos(x_ids: list[int], stop: set[int]) -> bool:
-    """Paper line 8: whether ``x`` ends with ``<eos>`` (or IT turn-end)."""
+    """Whether x ends with eos (or IT turn-end)."""
     return bool(x_ids) and x_ids[-1] in stop
 
 
@@ -199,13 +171,10 @@ def generate_sequential_labels(
     max_total_tokens: int = MAX_TOTAL_TOKENS,
     **wrap_kwargs: Any,
 ) -> tuple[list[str], PrivacyAccount]:
-    """Amin et al. Algorithm 1 lines 4–20 for one batch (harness adaptations).
+    """Amin et al. Algorithm 1 nested loop, adapted for this comparison.
 
-    Follows the paper's nested loop structure, but the comparison harness
-    stops once ``k`` EOS-terminated sequences are collected (rather than
-    burning the full ``r`` budget), caps total generated tokens at ``r``
-    via ``total_tokens < harness_token_cap``, reuses the prompt KV cache
-    across sequences, and prints per-sequence progress.
+    Stops at k EOS-terminated sequences rather than burning the full r
+    budget, caps total tokens, reuses the prompt KV cache, prints progress.
     """
     wrap_kwargs = {**wrap_kwargs, "k": k}
     prompts = [wrap_fn(items=text, **wrap_kwargs) for text in texts]
@@ -215,9 +184,9 @@ def generate_sequential_labels(
     stop = tg.stop_ids()
     harness_token_cap = r
 
-    # Line 4: θ̂ ← θ + Laplace(σ)
+    # Line 4: theta_hat = theta + Laplace(sigma)
     theta_hat = theta + _laplace(sigma)
-    # Line 5: t ← 0
+    # Line 5: t = 0
     t = 0
     n_public = 0
     total_tokens = 0
@@ -234,7 +203,7 @@ def generate_sequential_labels(
         seq_idx = len(raw_labels) + 1
         print(f"  [sequential_eos] sequence {seq_idx}/{k} (private {t}/{r})")
 
-        # Line 7: x ← empty token sequence; reuse prompt KV cache
+        # Line 7: x = empty token sequence; reuse prompt KV cache
         x_ids: list[int] = []
         logits = prefill_logits.clone()
         state = _clone_prefill_state(prefill_state)
@@ -246,16 +215,16 @@ def generate_sequential_labels(
             if total_tokens >= harness_token_cap:
                 break
 
-            # Lines 9–10
+            # Lines 9-10
             Z = logits[: len(prompt_ids)]
             z_public = logits[len(prompt_ids)]
 
             # Line 11
             d_hat = softmax_l1_distance(Z, z_public, s) + _laplace(2.0 * sigma)
 
-            # Lines 12–16 (private) or 17–18 (public)
+            # Lines 12-16 (private) or 17-18 (public)
             if d_hat >= theta_hat and t < r:
-                # Lines 13–14 via sample_private; line 15–16 below
+                # Lines 13-14 via sample_private; lines 15-16 inline
                 tok = sample_private(Z, c, tau, s)
                 t += 1
                 theta_hat = theta + _laplace(sigma)
@@ -270,7 +239,7 @@ def generate_sequential_labels(
             if not _sequence_ends_with_eos(x_ids, stop):
                 logits, state = tg.continue_batched(state, [tok] * (len(prompt_ids) + 1))
 
-        # Line 20: X ← X ∪ {x}
+        # Line 20: X = X union {x}
         decoded = tg.decode(x_ids)
         raw_labels.append(decoded)
         print(
@@ -302,7 +271,7 @@ def generate_sequential_labels(
 
 @dataclass(frozen=True)
 class GenerationMode:
-    """One row in the comparison: name, runner, parser."""
+    """One comparison row: name, runner, parser."""
 
     name: str
     runner: Callable[..., tuple[str | list[str], PrivacyAccount, int]]

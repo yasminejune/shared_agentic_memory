@@ -1,25 +1,17 @@
-"""Multi-trajectory smoke runner for the WP1.5 / WP1.6 agent loop.
+"""Run WP1.5 N times, one private store per fake user.
 
-Repeats ``scripts/memories/WP1_5.py`` ``N`` times against the same
-aim, varying the ``--user-id`` so each run writes to a distinct
-``data/memories/<user_id>.jsonl``. After the loop, lists every
-per-user JSONL touched and the number of entries it now holds, so the
-human can eyeball whether each trajectory produced a private memory
-before the WP2 shared-memory pipeline (``scripts/memories/WP2_pipeline.py``)
-consumes them.
+Same aim each time, different ``--user-id``, so each trajectory writes
+``data/memories/<user_id>.jsonl``. After the loop it lists every JSONL
+and how many entries it holds. I look at that before feeding the
+stores into anything shared.
 
-This is the Phase 1.1 standalone harness for the multi-trajectory
-orchestration step: WP1.5 itself only runs one trajectory per
-invocation, so this loop is the smallest stand-alone exerciser of
-"N trajectories produce N per-user stores" without yet adding the
-round-1 / round-2 / buffer logic that the WP2 orchestrator layers on
-top. Each trajectory runs as its own ``python scripts/memories/WP1_5.py``
-subprocess so the Playwright browser, the LLM clients, and the
-sentence-transformers Embedder are all torn down cleanly between
-runs and the failure of one trajectory does not poison the next.
+WP1_5.py itself is one trajectory per process. This wrapper is the
+smallest way to get N stores without pulling in the shared-memory
+pipeline. Each run is a subprocess so Playwright, the LLM client,
+and the embedder get torn down between users; one crash does not
+take the rest with it.
 
-Defaults to ``N = 2`` for the smoke test; pass ``--n 10`` to scale
-to the WP2 trigger-window size.
+N=2 by default. Pass ``--n 10`` if you want a fuller window.
 """
 
 from __future__ import annotations
@@ -43,12 +35,10 @@ DEFAULT_MAX_STEPS = 10
 
 
 def _user_id_for(prefix: str, idx: int) -> str:
-    """Render the ``user_id`` used for trajectory ``idx``.
+    """``user_id`` for trajectory ``idx``, zero-padded to two digits.
 
-    Zero-padded to two digits so a 10-trajectory run sorts in
-    insertion order on the filesystem (``user_00.jsonl`` before
-    ``user_10.jsonl``) and stays readable in the per-user store
-    summary printed at the end.
+    So a 10-run batch sorts as ``user_00.jsonl`` ... ``user_09.jsonl``
+    and the summary at the end is readable.
     """
     return f"{prefix}{idx:02d}"
 
@@ -65,11 +55,8 @@ def _run_one(
 ) -> int:
     """Spawn one WP1.5 subprocess and return its exit code.
 
-    Streaming stdout / stderr to the parent terminal (no ``capture``)
-    keeps the per-trajectory ``[Observe]: / [Think]: / [Act]:`` trace
-    visible during the run, matching the conventions decision in
-    ``.claude/memory/decisions.md`` ("terminal output for a WP1 run
-    is exactly three trace prefixes").
+    Stdout/stderr stream to this terminal (no capture) so the usual
+    ``[Observe]:`` / ``[Think]:`` / ``[Act]:`` trace stays visible.
     """
     cmd = [
         sys.executable,
@@ -94,14 +81,11 @@ def _run_one(
 
 
 def _summarise_stores(memory_dir: Path, user_ids: list[str]) -> None:
-    """Print one line per per-user store written by the loop.
+    """Print one line per per-user store the loop touched.
 
-    Loads each :class:`MemoryStore` through the regular
-    :meth:`MemoryStore.load` path so we get the same entry-count the
-    WP2 orchestrator will see when it reads them back. Stores with
-    zero entries (the trajectory's LLM extractor produced no
-    parseable items) are listed too so the user knows which
-    trajectories silently dropped.
+    Loaded through MemoryStore.load, so the count matches what the
+    shared-memory pipeline will see. Zero-entry stores are listed
+    too (extractor produced nothing parseable).
     """
     embedder = Embedder()
     print()

@@ -1,17 +1,7 @@
-"""Compile the Observe -> Think -> Act loop.
+"""Compile the Observe-Think-Act loop.
 
-The Think factory is the caller's job: WP1.1 and WP1.2 pass
-``make_think_scripted(stub_actions)``, WP1.3 onwards pass
-``make_think(client)`` (the LLM-driven Think node). The graph keeps the
-same topology and adds two safety routes after Think:
-
-* parse failure (Think returned an empty action) -> back to Observe
-  with the failure logged in ``state['history']``; the next prompt
-  will see it. No special error field is involved.
-* ``state['step'] >= max_steps`` -> END, regardless of ``done``. This
-  is a hard cap so unproductive loops (repeated parse failures, the
-  LLM never emitting ``stop``) cannot run forever. The thesis proposal
-  flags 30 as a conservative default.
+The caller supplies Think (scripted or LLM). After Think, an empty
+action returns to Observe; done or step >= max_steps ends the run.
 """
 
 from __future__ import annotations
@@ -29,15 +19,10 @@ DEFAULT_MAX_STEPS = 10
 
 
 def build_graph(page: Page, think_fn: NodeFn, *, max_steps: int = DEFAULT_MAX_STEPS) -> Any:
-    """Return a compiled LangGraph app bound to ``page`` and ``think_fn``.
+    """Return a compiled LangGraph app bound to page and think_fn.
 
-    Routing after Think has four outcomes:
-
-    * ``state['done']`` is True            -> END
-    * ``state['step'] >= max_steps``       -> END (hard cap)
-    * ``state['action']`` is empty         -> Observe (parse failure
-                                              recovery via history)
-    * otherwise                            -> Act -> Observe
+    After Think: done or step >= max_steps ends; empty action returns
+    to Observe; otherwise Act then Observe.
     """
 
     def route_from_think(state: AgentState) -> str:

@@ -1,9 +1,8 @@
-"""Assess overlap of high-logit head tokens across memories before averaging.
+"""Overlap of high-logit head tokens across the toy memories, before averaging.
 
-For each of the 10 toy memories, extracts the private next-token logit vector
-via LABEL_PROMPT at a chosen generation step (not always step 1), clips at
-each c, finds the head set (ranks above the largest early drop in the ranked
-curve), and reports pairwise/global overlap.
+For each of the 10 rows in examples.csv, take the private next-token logits
+at TOKEN_POSITION, clip at each c, take the head (ranks above the biggest
+early drop), and report pairwise/global overlap.
 """
 
 from __future__ import annotations
@@ -15,9 +14,9 @@ import numpy as np
 import pandas as pd
 import torch
 
-from agent_memories.agent.privacy.privatisation import clip_recenter
-from agent_memories.agent.privacy.prompts import wrap_label
-from agent_memories.agent.privacy.token_generation import (
+from agent_memories.agent.amin_et_al.privatisation import clip_recenter
+from agent_memories.agent.lm.prompts import wrap_label
+from agent_memories.agent.lm.token_generation import (
     continue_batched,
     decode,
     encode_chat,

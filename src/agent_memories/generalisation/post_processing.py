@@ -1,29 +1,7 @@
-"""WP2-plan §3.5: title and description from DP-released content.
+"""Title and description for a shared memory.
 
-The WP2 round-2 Amin mechanism (§3.3) emits only the ``content`` field
-of a shared ReasoningBank :class:`MemoryItem`. This module produces
-the matching ``title`` and ``description`` via a standard Qwen chat
-turn over the existing :class:`ChatClient` Protocol. Both inputs
-(``content`` from round 2, ``label`` from round 1) are DP-released
-artifacts, so by the post-processing property of differential privacy
-(Dwork and Roth 2014, Proposition 2.1) this call contributes zero to
-``rho_total`` -- it is off the DP path (WP2-plan §4.7).
-
-The §3.5 prompt is reproduced verbatim and held fixed as an
-experimental control variable, matching the WP1.6 convention for the
-ReasoningBank Appendix A.1 prompts (`.claude/memory/decisions.md`,
-Conventions). It is split into a system message (instruction block
-with ``LABEL_PLACEHOLDER`` substituted) and a user message (the
-``Content:`` data block), mirroring the WP1.6 judge and extractor
-split in :mod:`agent_memories.memory.pipeline`.
-
-Robustness, per §3.5: the parser accepts the two-line ``Title:`` /
-``Description:`` reply, retries once at ``temperature=0`` on parse
-failure or constraint violation, and falls back to ``title = first 8
-words of content`` and ``description = first sentence of content`` if
-the retry also fails. Both fallbacks are deterministic functions of
-the DP-released ``content`` so the privacy guarantee is unaffected
-(§3.5 closing paragraph).
+A normal Qwen call. The content is already private, so this step does not
+spend more budget. Title is 1-10 words with no trailing punctuation.
 """
 
 from __future__ import annotations
@@ -69,30 +47,12 @@ def title_and_description(
     *,
     client: ChatClient,
 ) -> tuple[str, str]:
-    """Produce ``(title, description)`` for a shared memory item's ``content``.
+    """Produce (title, description) for a shared memory item's content.
 
-    Per WP2-plan §3.5 the title is 1-10 words, capitalised, no trailing
-    punctuation; the description is one sentence summarising the
-    content's recommendation. Both must be grounded in ``content``
-    (the prompt forbids new facts).
-
-    Behaviour:
-
-    1. First attempt at ``temperature=0.0``. The §3.5 output is two
-       short constrained lines so the §3.5 prompt does not need
-       sampling diversity; ``temperature=0.0`` matches the WP1.6
-       judge convention (`.claude/memory/decisions.md`, Conventions).
-    2. On parse failure or constraint violation (title word count
-       outside 1-10, or trailing punctuation, or empty description),
-       retry once at ``temperature=0.0`` per §3.5.
-    3. If the retry also fails, return the deterministic fallback
-       ``(first 8 words of content, first sentence of content)``.
-       The fallback is a function of the DP-released ``content`` only
-       and incurs no additional privacy cost (§3.5, §4.7).
-
-    ``client`` is any :class:`ChatClient`. The Qwen Ollama wrapper at
-    :class:`agent_memories.services.ollama_client.OllamaClient` is the
-    project default per `.claude/memory/decisions.md`.
+    Title is 1-10 words with no trailing punctuation. Description is one
+    sentence grounded in the content. First attempt, then retry once; if
+    both fail, title is the first 8 words of content and description is
+    its first sentence.
     """
     system_prompt = SYSTEM_PROMPT_TEMPLATE.format(label=label)
     user_prompt = USER_PROMPT_TEMPLATE.format(content=content)
@@ -121,17 +81,10 @@ def title_and_description(
 
 
 def save_intermediate(item: MemoryItem, *, label: str, path: Path) -> None:
-    """Append one shared-memory record to the §3.5 intermediate JSONL file.
+    """Append one shared-memory record to an intermediate JSONL file.
 
-    Writes a single JSON object per line to ``path`` (creating its
-    parent directory if missing), matching the
-    :class:`agent_memories.memory.MemoryStore` JSONL convention
-    (one record per line, UTF-8, newline-terminated). The schema is
-    deliberately a thin intermediate carrier --
-    ``{label, title, description, content, created_at}`` -- separate
-    from the eventual ``data/memories/shared.jsonl`` written by the
-    full WP2 pipeline; integration with :class:`MemoryStore` is left
-    to WP2.4.
+    Writes a single JSON object per line. Schema is
+    {label, title, description, content, created_at}.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     record: dict[str, Any] = {
@@ -146,12 +99,11 @@ def save_intermediate(item: MemoryItem, *, label: str, path: Path) -> None:
 
 
 def _parse_reply(reply: str) -> tuple[str, str] | None:
-    """Return ``(title, description)`` if ``reply`` matches §3.5 constraints.
+    """Return (title, description) if reply matches the title constraints.
 
-    Returns ``None`` when either line is missing, the title's word
-    count is outside ``[1, 10]``, the title ends in trailing
-    punctuation, or the description is empty after stripping. The
-    caller treats ``None`` as a retry trigger.
+    Returns None when either line is missing, the title word count is
+    outside [1, 10], the title ends in trailing punctuation, or the
+    description is empty after stripping.
     """
     title_match = _TITLE_LINE.search(reply)
     description_match = _DESCRIPTION_LINE.search(reply)
@@ -165,7 +117,7 @@ def _parse_reply(reply: str) -> tuple[str, str] | None:
 
 
 def _is_valid_title(title: str) -> bool:
-    """Apply the §3.5 title constraints: 1-10 words, no trailing punctuation."""
+    """True if title is 1-10 words with no trailing punctuation."""
     if not title:
         return False
     if title[-1] in _TRAILING_PUNCT:
@@ -175,15 +127,10 @@ def _is_valid_title(title: str) -> bool:
 
 
 def _fallback(content: str) -> tuple[str, str]:
-    """Deterministic §3.5 fallback when both LLM attempts fail to parse.
+    """Deterministic fallback when both LLM attempts fail to parse.
 
-    Title is the first :data:`FALLBACK_TITLE_WORDS` whitespace-split
-    tokens of ``content`` joined by single spaces, stripped of
-    trailing punctuation, and with the first character upper-cased.
-    Description is the first sentence of ``content``, defined as the
-    text before the earliest of the boundaries ``". "``, ``"! "``,
-    ``"? "`` (the §3.5 split rule). Both outputs depend only on the
-    DP-released ``content`` so the privacy guarantee is unaffected.
+    Title is the first FALLBACK_TITLE_WORDS of content. Description is
+    the first sentence of content (split on '. ', '! ', or '? ').
     """
     return _fallback_title(content), _fallback_description(content)
 

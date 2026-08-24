@@ -1,4 +1,4 @@
-"""Compile the BrowserGym Observe -> Think -> Act loop."""
+"""The graph for the Observe - Think - Act loop on a BrowserGym WebArena env."""
 
 from __future__ import annotations
 
@@ -20,9 +20,11 @@ def build_graph(
     *,
     max_steps: int = DEFAULT_MAX_STEPS,
 ) -> Any:
-    """Return a compiled LangGraph app bound to a :class:`WebArenaEnvWrapper`."""
+    """Compile Observe -> Think -> Act. Think routes to act, observe, or END."""
 
     def route_from_think(state: AgentState) -> str:
+        # After think, the agent should either terminate if done, end if max steps has been reached,
+        # make an observation if the observation didn't go through, or act.
         if state["done"]:
             return END
         if state["step"] >= max_steps:
@@ -36,11 +38,14 @@ def build_graph(
     workflow.add_node("think", think_fn)  # type: ignore[call-overload]
     workflow.add_node("act", make_act(wrapper))  # type: ignore[call-overload]
     workflow.add_edge(START, "observe")
+    # After observe, the agent always thinks. No function necessary.
     workflow.add_edge("observe", "think")
+    # After think, the agent has multiple options.
     workflow.add_conditional_edges(
         "think",
         route_from_think,
         {END: END, "observe": "observe", "act": "act"},
     )
+    # After act, always observe. No function necessary.
     workflow.add_edge("act", "observe")
     return workflow.compile()

@@ -1,23 +1,4 @@
-"""Unit tests for the WP1.6 :class:`MemoryPipeline`.
-
-A ``FakeClient`` returns a queued reply per call so no network is hit;
-a ``FakeEmbedder`` keeps query-embedding behaviour deterministic. The
-tests cover:
-
-* the judge's ``success`` reply routes to the success extractor and
-  produces a successful :class:`MemoryEntry`;
-* the judge's ``failure`` reply routes to the failure extractor and
-  produces a failed :class:`MemoryEntry`;
-* malformed judge output defaults to ``failed`` and the failure
-  extractor is invoked;
-* the extractor's markdown reply is parsed into 1-3
-  :class:`MemoryItem`s, with malformed blocks dropped;
-* a zero-item extraction returns ``None`` and writes nothing to disk;
-* the disk record carries ``user_id``, ``query``, ``outcome`` and the
-  parsed items;
-* the judge user prompt assembly includes intent, trajectory and
-  the final-state markdown.
-"""
+"""Judge and extractor behaviour in the ReasoningBank memory pipeline."""
 
 from __future__ import annotations
 
@@ -36,57 +17,16 @@ from agent_memories.memory.pipeline import (
     MemoryPipeline,
 )
 from agent_memories.memory.store import MemoryStore
+from tests.conftest import FakeChatClient, FakeEmbedder
 
-
-class _FakeEmbedder:
-    """Deterministic embedder used to keep the store fast and offline."""
-
-    def __init__(self, mapping: dict[str, list[float]] | None = None) -> None:
-        self._mapping = dict(mapping or {})
-        self._dim = 3
-
-    def embed(self, text: str) -> list[float]:
-        return list(self._mapping.get(text, [0.0] * self._dim))
-
-    def embed_batch(self, texts: list[str]) -> list[list[float]]:
-        return [self.embed(t) for t in texts]
-
-
-class _FakeClient:
-    """Chat double that returns a queued reply per call.
-
-    Records the system + user payload of every call so individual
-    tests can assert prompt assembly and call ordering.
-    """
-
-    def __init__(self, replies: list[str]) -> None:
-        self._replies = list(replies)
-        self.calls: list[dict[str, object]] = []
-
-    def chat(
-        self,
-        system: str,
-        user: str,
-        *,
-        temperature: float = 0.0,
-        max_tokens: int | None = None,
-    ) -> str:
-        self.calls.append(
-            {
-                "system": system,
-                "user": user,
-                "temperature": temperature,
-                "max_tokens": max_tokens,
-            }
-        )
-        return self._replies.pop(0)
+pytestmark = pytest.mark.unit
 
 
 def _make_store(tmp_path: Path, mapping: dict[str, list[float]] | None = None) -> MemoryStore:
     return MemoryStore(
         path=tmp_path / "user_a.jsonl",
         user_id="user_a",
-        embedder=_FakeEmbedder(mapping),
+        embedder=FakeEmbedder(mapping),
     )
 
 
@@ -113,11 +53,9 @@ FAILURE_ONE_ITEM = (
 )
 
 
-@pytest.mark.unit
 def test_judge_success_invokes_success_extractor(tmp_path: Path) -> None:
-    """A ``success`` judgement must select the success extractor and store an entry."""
     store = _make_store(tmp_path, {"shop the site": [1.0, 0.0, 0.0]})
-    client = _FakeClient(
+    client = FakeChatClient(
         [
             "Thoughts: looks fine to me.\nStatus: success",
             SUCCESS_TWO_ITEMS,
@@ -137,15 +75,12 @@ def test_judge_success_invokes_success_extractor(tmp_path: Path) -> None:
     assert len(entry.items) == 2
     assert entry.items[0].title.startswith("Use the labelled")
     assert "Enter is the most reliable" in entry.items[0].content
-    # second call must be the SUCCESS extractor
     assert client.calls[1]["system"] == SUCCESS_SYSTEM_PROMPT
 
 
-@pytest.mark.unit
 def test_judge_failure_invokes_failure_extractor(tmp_path: Path) -> None:
-    """A ``failure`` judgement must select the failure extractor and tag the entry."""
     store = _make_store(tmp_path, {"shop the site": [1.0, 0.0, 0.0]})
-    client = _FakeClient(
+    client = FakeChatClient(
         [
             "Thoughts: the agent loop never advanced.\nStatus: failure",
             FAILURE_ONE_ITEM,
@@ -163,11 +98,9 @@ def test_judge_failure_invokes_failure_extractor(tmp_path: Path) -> None:
     assert client.calls[1]["system"] == FAILURE_SYSTEM_PROMPT
 
 
-@pytest.mark.unit
 def test_malformed_judge_defaults_to_failure(tmp_path: Path) -> None:
-    """A judge reply without a parseable ``Status:`` line must default to ``failed``."""
     store = _make_store(tmp_path, {"do thing": [1.0, 0.0, 0.0]})
-    client = _FakeClient(
+    client = FakeChatClient(
         [
             "I cannot tell from this trajectory.",
             FAILURE_ONE_ITEM,
@@ -182,9 +115,7 @@ def test_malformed_judge_defaults_to_failure(tmp_path: Path) -> None:
     assert client.calls[1]["system"] == FAILURE_SYSTEM_PROMPT
 
 
-@pytest.mark.unit
 def test_extractor_parses_three_items(tmp_path: Path) -> None:
-    """Up to three well-formed ``# Memory Item N`` blocks must be parsed."""
     store = _make_store(tmp_path, {"do thing": [1.0, 0.0, 0.0]})
     three_items = (
         "# Memory Item 1\n"
@@ -194,7 +125,7 @@ def test_extractor_parses_three_items(tmp_path: Path) -> None:
         "# Memory Item 3\n"
         "## Title C\n## Description c desc.\n## Content c content.\n"
     )
-    client = _FakeClient(
+    client = FakeChatClient(
         [
             "Thoughts: ok\nStatus: success",
             three_items,
@@ -209,9 +140,7 @@ def test_extractor_parses_three_items(tmp_path: Path) -> None:
     assert [it.content for it in entry.items] == ["a content.", "b content.", "c content."]
 
 
-@pytest.mark.unit
 def test_extractor_drops_malformed_block(tmp_path: Path) -> None:
-    """A block missing one of the three required sections must be dropped."""
     store = _make_store(tmp_path, {"do thing": [1.0, 0.0, 0.0]})
     broken_middle = (
         "# Memory Item 1\n"
@@ -221,7 +150,7 @@ def test_extractor_drops_malformed_block(tmp_path: Path) -> None:
         "# Memory Item 3\n"
         "## Title C\n## Description c desc.\n## Content c content.\n"
     )
-    client = _FakeClient(
+    client = FakeChatClient(
         [
             "Thoughts: ok\nStatus: success",
             broken_middle,
@@ -235,15 +164,13 @@ def test_extractor_drops_malformed_block(tmp_path: Path) -> None:
     assert [it.title for it in entry.items] == ["A", "C"]
 
 
-@pytest.mark.unit
 def test_extractor_caps_at_three_items(tmp_path: Path) -> None:
-    """Even when the model emits more than 3 items, only the first 3 are kept."""
     store = _make_store(tmp_path, {"do thing": [1.0, 0.0, 0.0]})
     four_items = "\n".join(
         f"# Memory Item {i + 1}\n" f"## Title T{i + 1}\n## Description d.\n## Content c.\n"
         for i in range(4)
     )
-    client = _FakeClient(["Thoughts: ok\nStatus: success", four_items])
+    client = FakeChatClient(["Thoughts: ok\nStatus: success", four_items])
     pipeline = MemoryPipeline(client=client, store=store)
 
     entry = pipeline.create_from_run(new_state(aim="do thing"), final_state="")
@@ -253,11 +180,9 @@ def test_extractor_caps_at_three_items(tmp_path: Path) -> None:
     assert [it.title for it in entry.items] == ["T1", "T2", "T3"]
 
 
-@pytest.mark.unit
 def test_zero_parsed_items_returns_none(tmp_path: Path) -> None:
-    """A model reply with no parseable item blocks must not write an entry."""
     store = _make_store(tmp_path, {"do thing": [1.0, 0.0, 0.0]})
-    client = _FakeClient(
+    client = FakeChatClient(
         [
             "Thoughts: ok\nStatus: success",
             "Sorry, I cannot extract any items from this trajectory.",
@@ -272,11 +197,9 @@ def test_zero_parsed_items_returns_none(tmp_path: Path) -> None:
     assert not store.path.exists()
 
 
-@pytest.mark.unit
 def test_disk_record_carries_query_outcome_items_and_user_id(tmp_path: Path) -> None:
-    """The JSONL line written after a run must round-trip the WP1.6 schema."""
     store = _make_store(tmp_path, {"do thing": [1.0, 0.0, 0.0]})
-    client = _FakeClient(["Thoughts: ok\nStatus: success", SUCCESS_TWO_ITEMS])
+    client = FakeChatClient(["Thoughts: ok\nStatus: success", SUCCESS_TWO_ITEMS])
     pipeline = MemoryPipeline(client=client, store=store)
 
     pipeline.create_from_run(new_state(aim="do thing"), final_state="")
@@ -292,11 +215,9 @@ def test_disk_record_carries_query_outcome_items_and_user_id(tmp_path: Path) -> 
     assert record["embedding"] == [1.0, 0.0, 0.0]
 
 
-@pytest.mark.unit
 def test_judge_prompt_assembly(tmp_path: Path) -> None:
-    """The judge user prompt must carry intent, trajectory and final_state."""
     store = _make_store(tmp_path, {"buy shoes": [1.0, 0.0, 0.0]})
-    client = _FakeClient(["Thoughts: ok\nStatus: success", SUCCESS_TWO_ITEMS])
+    client = FakeChatClient(["Thoughts: ok\nStatus: success", SUCCESS_TWO_ITEMS])
     pipeline = MemoryPipeline(client=client, store=store)
 
     state = new_state(aim="buy shoes")
@@ -320,11 +241,9 @@ def test_judge_prompt_assembly(tmp_path: Path) -> None:
     assert "Bot response to the user: N/A" in user
 
 
-@pytest.mark.unit
 def test_extractor_call_uses_temperature_one_and_extractor_budget(tmp_path: Path) -> None:
-    """The extractor must run at T=1.0 with the higher max_tokens budget."""
     store = _make_store(tmp_path, {"buy shoes": [1.0, 0.0, 0.0]})
-    client = _FakeClient(["Thoughts: ok\nStatus: success", SUCCESS_TWO_ITEMS])
+    client = FakeChatClient(["Thoughts: ok\nStatus: success", SUCCESS_TWO_ITEMS])
     pipeline = MemoryPipeline(client=client, store=store)
 
     pipeline.create_from_run(new_state(aim="buy shoes"), final_state="")
@@ -338,7 +257,6 @@ def test_extractor_call_uses_temperature_one_and_extractor_budget(tmp_path: Path
     assert "Trajectory:" in user
 
 
-@pytest.mark.unit
 @pytest.mark.parametrize(
     "reply, expected",
     [
@@ -350,9 +268,8 @@ def test_extractor_call_uses_temperature_one_and_extractor_budget(tmp_path: Path
     ],
 )
 def test_judge_status_parser_variants(tmp_path: Path, reply: str, expected: str) -> None:
-    """Common casing/quoting variants of the judge status line must parse correctly."""
     store = _make_store(tmp_path, {"x": [1.0, 0.0, 0.0]})
-    client = _FakeClient([reply, FAILURE_ONE_ITEM])
+    client = FakeChatClient([reply, FAILURE_ONE_ITEM])
     pipeline = MemoryPipeline(client=client, store=store)
 
     entry = pipeline.create_from_run(new_state(aim="x"), final_state="")
@@ -362,10 +279,9 @@ def test_judge_status_parser_variants(tmp_path: Path, reply: str, expected: str)
 
 
 def test_build_from_run_does_not_write_jsonl(tmp_path: Path) -> None:
-    """build_from_run returns an entry in memory without touching the store file."""
     store = _make_store(tmp_path, {"buy shoes": [1.0, 0.0, 0.0]})
     store_path = tmp_path / "user_a.jsonl"
-    client = _FakeClient(
+    client = FakeChatClient(
         [
             "Thoughts: ok.\nStatus: success",
             FAILURE_ONE_ITEM,
@@ -388,11 +304,9 @@ def test_build_from_run_does_not_write_jsonl(tmp_path: Path) -> None:
     assert not store_path.exists()
 
 
-@pytest.mark.unit
 def test_build_from_run_splits_judge_from_extraction(tmp_path: Path) -> None:
-    """Judge success with zero extracted items keeps judge_outcome separate."""
     store = _make_store(tmp_path)
-    client = _FakeClient(
+    client = FakeChatClient(
         [
             "Thoughts: ok.\nStatus: success",
             "Sorry, I cannot extract any items from this trajectory.",

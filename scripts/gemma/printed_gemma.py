@@ -1,3 +1,9 @@
+"""Same logit dump as tokens_gemma.py, plus the argmax token printed.
+
+Runs on MPS. Added the decode step so I could see whether the greedy
+next token looked like English before trusting the vector.
+"""
+
 import os
 
 import torch
@@ -31,9 +37,9 @@ input_ids = tokenizer.apply_chat_template(
 with torch.no_grad():
     outputs = model(input_ids=input_ids)
 
-# This is what Algorithm 1 needs — raw logit vector over vocabulary
-logits = outputs.logits  # shape: [batch, seq_len, vocab_size]
-next_token_logits = logits[0, -1, :]  # logits for next token prediction
+# Next-token logits over the vocab; this is the vector Amin averages.
+logits = outputs.logits  # [batch, seq_len, vocab_size]
+next_token_logits = logits[0, -1, :]
 
 print(f"Logit vector shape: {next_token_logits.shape}")
 print(f"Vocabulary size: {next_token_logits.shape[0]}")

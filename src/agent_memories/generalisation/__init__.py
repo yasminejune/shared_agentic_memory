@@ -1,21 +1,20 @@
-"""WP2 cross-user generalisation pipeline (post-processing arm).
+"""Shared-memory pipeline: DP labels, assignment, content, then title and description.
 
-This subpackage will house the full WP2 pipeline described in
-``.claude/thesis/WP2-plan.md``. The first piece landed is §3.5
-post-processing: a standard Qwen chat call that turns a DP-released
-``content`` paragraph (from the round-2 Amin mechanism in §3.3) and a
-DP-released round-1 label into the matching ``title`` and
-``description`` of a shared :class:`MemoryItem`.
-
-The post-processing call is off the differential-privacy path: by the
-post-processing property of differential privacy (Dwork and Roth 2014,
-Proposition 2.1) any function computed on DP-released artifacts is
-itself DP-released at the same level, so this call contributes zero
-to the privacy account (see WP2-plan §4.7).
+Step 1 synthesises InvisibleInk labels from task queries. Step 2 assigns
+each private entry to one label by cosine similarity. Step 3 generates
+the content field only. Step 4 writes title and description from that
+released content and stores the shared record.
 """
 
 from .assignment import LabelAssignment, assign_memories_to_labels, group_by_label
-from .buffer import GatingResult, read_buffer, select_round2_inputs, write_buffer
+from .buffer import (
+    GatingResult,
+    entry_id,
+    read_buffer,
+    select_round2_inputs,
+    write_buffer,
+)
+from .io import load_memory_entries_from_csv, render_item_block
 from .labelling import parse_json_labels, parse_numbered_labels
 from .post_processing import save_intermediate, title_and_description
 
@@ -23,10 +22,13 @@ __all__ = [
     "GatingResult",
     "LabelAssignment",
     "assign_memories_to_labels",
+    "entry_id",
     "group_by_label",
+    "load_memory_entries_from_csv",
     "parse_json_labels",
     "parse_numbered_labels",
     "read_buffer",
+    "render_item_block",
     "save_intermediate",
     "select_round2_inputs",
     "title_and_description",

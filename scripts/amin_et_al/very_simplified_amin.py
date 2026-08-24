@@ -1,38 +1,11 @@
-"""Plumbing check for the WP2.3 clip+average+decode path, full loop.
+"""End-to-end check of clip, average, and decode on the toy memories.
 
-Repeats the first toy example from ``scripts/amin_et_al/examples.csv``
-(``"I hated the event, terrible."``) ten times so the batch ``Z`` of
-shape ``(10, vocab_size)`` has ten identical rows, and runs the same
-generation loop as :mod:`scripts.amin_et_al.simplified_amin`: pre-
-tokenise each wrapped prompt once via
-:func:`~agent_memories.agent.privacy.token_generation.encode_chat`
-so the Gemma 2 IT chat template is applied, then at each step
-compute next-token logits for ``[ids + x_ids for ids in prompt_ids]``,
-clip per row, average, sample one token, append to the running
-``x_ids``, repeat.
+Repeats the first examples.csv row ten times so every batch row is
+identical. Per-row samples should match the averaged sample under
+argmax; this does not test averaging when rows differ.
 
-At every step the script also samples the next token from each
-individual row's softmax and confirms it matches the sample taken
-from the clipped+averaged distribution. Because all rows are identical
-and the appended suffix is shared across the batch, the rows stay
-identical at every step, so :func:`clip_recenter` is row-wise an
-identity-up-to-shift, ``Z_clipped.mean(dim=0)`` reduces to row 0, and
-the per-row distribution equals the averaged distribution at every
-step. The check validates the call sequence (clip -> mean -> softmax
--> decode) but does not exercise averaging *behaviour* (averaging
-only matters when rows differ); it is a check on the plumbing, not
-the algorithm.
-
-The decoding rule is selectable via ``--sample``:
-
-* ``argmax`` (default) gives a deterministic check — when rows are
-  identical the per-prompt argmax and the averaged argmax must
-  agree by construction, so any mismatch is a real plumbing bug.
-* ``multinomial`` mirrors ``simplified_amin.py``'s sampling rule
-  exactly and is expected to disagree intermittently (each
-  ``torch.multinomial`` call draws independently from the same
-  distribution), which is informative about the per-step RNG noise
-  rather than the averaging code.
+--sample argmax is the deterministic plumbing check. --sample multinomial
+matches simplified_amin.py and can disagree because each draw is independent.
 """
 
 from __future__ import annotations
@@ -42,9 +15,9 @@ from collections.abc import Callable
 
 import torch
 
-from agent_memories.agent.privacy import token_generation as tg
-from agent_memories.agent.privacy.privatisation import clip_recenter
-from agent_memories.agent.privacy.prompts import wrap
+from agent_memories.agent.amin_et_al.privatisation import clip_recenter
+from agent_memories.agent.lm import token_generation as tg
+from agent_memories.agent.lm.prompts import wrap
 
 C = 10.0  # logit clip bound, matches simplified_amin.py / WP2_3.py
 MAX_TOTAL_TOKENS = 80  # matches simplified_amin.py / WP2_3.py R_MAX
@@ -74,18 +47,10 @@ def step(
     c: float,
     sample: Callable[[torch.Tensor], int],
 ) -> tuple[list[int], int, float]:
-    """One step of the check.
+    """One clip+average step.
 
-    Returns ``(per_prompt_tokens, averaged_token, max_row_diff)`` where
-    ``per_prompt_tokens[i]`` is ``sample(softmax(Z[i]))``,
-    ``averaged_token`` is ``sample(softmax(clip_recenter(Z, c).mean(dim=0)))``
-    (the ``simplified_amin.py`` path), and ``max_row_diff`` is
-    ``max |Z[i] - Z[0]|`` as an MPS-determinism diagnostic.
-    ``sample`` is applied identically to the per-prompt softmaxes and
-    the averaged softmax so any divergence in the agreement check is
-    attributable to the averaging code (or, for the stochastic
-    sampler, to RNG independence between draws) rather than to the
-    decoding rule itself.
+    Returns per-prompt samples, the averaged sample, and max |Z[i]-Z[0]|
+    (MPS determinism check). Same sampler on both sides.
     """
     max_row_diff = float((Z - Z[0]).abs().max().item())
     per_prompt_tokens = [sample(torch.softmax(Z[i], dim=-1)) for i in range(Z.shape[0])]
