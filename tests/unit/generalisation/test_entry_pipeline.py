@@ -1,4 +1,4 @@
-"""Tests for entry-level WP2 batching and privacy accounting."""
+"""WP2 batches whole entries, not sibling items, and accounts per entry."""
 
 from __future__ import annotations
 
@@ -15,6 +15,8 @@ from agent_memories.generalisation import (
     write_buffer,
 )
 from agent_memories.memory import MemoryEntry, MemoryItem
+
+pytestmark = pytest.mark.unit
 
 
 class _UnusedEmbedder:

@@ -13,6 +13,8 @@ from agent_memories.services.mistral_client import (
     MistralClient,
 )
 
+pytestmark = pytest.mark.unit
+
 
 def _sdk_error(status_code: int) -> SDKError:
     """Build a real SDKError with an httpx response of the given status code."""
@@ -30,7 +32,6 @@ def _make_client() -> MistralClient:
     return MistralClient(api_key="dummy")
 
 
-@pytest.mark.unit
 def test_chat_returns_completion_on_success(monkeypatch: pytest.MonkeyPatch) -> None:
     client = _make_client()
     calls: list[dict[str, Any]] = []
@@ -53,7 +54,6 @@ def test_chat_returns_completion_on_success(monkeypatch: pytest.MonkeyPatch) -> 
     ]
 
 
-@pytest.mark.unit
 def test_chat_max_tokens_kwarg_overrides_constructor_default(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -71,7 +71,6 @@ def test_chat_max_tokens_kwarg_overrides_constructor_default(
     assert seen["max_tokens"] == 512
 
 
-@pytest.mark.unit
 def test_chat_propagates_429_without_retry(monkeypatch: pytest.MonkeyPatch) -> None:
     client = _make_client()
     attempts = {"n": 0}
@@ -88,7 +87,6 @@ def test_chat_propagates_429_without_retry(monkeypatch: pytest.MonkeyPatch) -> N
     assert attempts["n"] == 1, "chat() must call _complete exactly once and re-raise"
 
 
-@pytest.mark.unit
 def test_chat_propagates_non_429_without_retry(monkeypatch: pytest.MonkeyPatch) -> None:
     client = _make_client()
     attempts = {"n": 0}
@@ -105,7 +103,6 @@ def test_chat_propagates_non_429_without_retry(monkeypatch: pytest.MonkeyPatch) 
     assert attempts["n"] == 1
 
 
-@pytest.mark.unit
 def test_missing_api_key_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     # MistralClient does not load .env; the runner does. Unset the env var
     # and check that the constructor refuses to proceed.

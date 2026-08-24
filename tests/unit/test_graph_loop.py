@@ -9,6 +9,8 @@ import pytest
 from agent_memories.agent import build_graph, new_state
 from agent_memories.agent.playwright.nodes import make_act, make_think
 
+pytestmark = pytest.mark.unit
+
 
 class _FakePage:
     """Page double that exposes only what Observe and Act need."""
@@ -71,7 +73,6 @@ class _ScriptedClient:
         return self._replies.pop(0)
 
 
-@pytest.mark.unit
 def test_act_captures_dispatch_exceptions_into_history() -> None:
     page = _FakePage()
     page._raise_on_next = True
@@ -92,7 +93,6 @@ def test_act_captures_dispatch_exceptions_into_history() -> None:
     assert record["outcome"].startswith("error: RuntimeError: locator detached")
 
 
-@pytest.mark.unit
 def test_max_steps_caps_a_parse_failure_loop() -> None:
     page = _FakePage()
     # The client always returns nonsense, so every Think is a parse failure.
@@ -107,7 +107,6 @@ def test_max_steps_caps_a_parse_failure_loop() -> None:
     assert all(r["outcome"].startswith("parse_failure:") for r in result["history"])
 
 
-@pytest.mark.unit
 def test_parse_failure_then_recovery_threads_history() -> None:
     page = _FakePage()
     client = _ScriptedClient(["I'll click", "click [e1]", "stop"])
@@ -132,7 +131,6 @@ class _AlwaysTimingOutClient:
         raise TimeoutError("read timed out after 60s")
 
 
-@pytest.mark.unit
 def test_loop_propagates_chat_exceptions() -> None:
     page = _FakePage()
     graph = build_graph(page, make_think(_AlwaysTimingOutClient()), max_steps=4)  # type: ignore[arg-type]

@@ -1,4 +1,4 @@
-"""Tests for the BrowserGym Think node."""
+"""Token budget, fenced-reply recovery and stuck detection on the BrowserGym Think node."""
 
 from __future__ import annotations
 
@@ -7,30 +7,9 @@ import pytest
 from agent_memories.agent.browsergym import nodes as browsergym_nodes
 from agent_memories.agent.browsergym.nodes import make_think
 from agent_memories.agent.state import AgentState, new_state
+from tests.conftest import FakeChatClient
 
-
-class _FakeClient:
-    def __init__(self, replies: list[str]) -> None:
-        self._replies = list(replies)
-        self.calls: list[dict[str, object]] = []
-
-    def chat(
-        self,
-        system: str,
-        user: str,
-        *,
-        temperature: float = 0.0,
-        max_tokens: int | None = None,
-    ) -> str:
-        self.calls.append(
-            {
-                "system": system,
-                "user": user,
-                "temperature": temperature,
-                "max_tokens": max_tokens,
-            }
-        )
-        return self._replies.pop(0)
+pytestmark = pytest.mark.unit
 
 
 def _seed_state(*, aim: str = "Find the top product") -> AgentState:
@@ -43,18 +22,16 @@ def _seed_state(*, aim: str = "Find the top product") -> AgentState:
     return state
 
 
-@pytest.mark.unit
 def test_think_budget_covers_reasoning_and_action() -> None:
-    client = _FakeClient(["click('53')"])
+    client = FakeChatClient(["click('53')"])
     make_think(client)(_seed_state())
 
     assert client.calls[0]["max_tokens"] == browsergym_nodes.THINK_MAX_TOKENS
     assert browsergym_nodes.THINK_MAX_TOKENS == 1024
 
 
-@pytest.mark.unit
 def test_fenced_reply_is_recovered_as_action() -> None:
-    client = _FakeClient(["```python\nclick('53')\n```"])
+    client = FakeChatClient(["```python\nclick('53')\n```"])
     result = make_think(client)(_seed_state())
 
     assert result["action"] == {"type": "browsergym", "string": "click('53')"}
@@ -62,9 +39,8 @@ def test_fenced_reply_is_recovered_as_action() -> None:
     assert result["history"] == []
 
 
-@pytest.mark.unit
-def test_empty_repeated_thoughts_trip_stuck_detector() -> None:
-    client = _FakeClient([])
+def test_empty_repeated_thoughts_trip_stuck() -> None:
+    client = FakeChatClient([])
     think = make_think(client, stuck_threshold=5)
     state = _seed_state()
     state["history"] = [

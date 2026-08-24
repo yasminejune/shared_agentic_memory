@@ -60,7 +60,7 @@ WEBARENA_ACTION_SET = HighLevelActionSet(
 
 
 def _build_python_includes() -> str:
-    """Assemble action source without BrowserGym's broken python_includes indent."""
+    """Create set of actions in a list without BrowserGym's broken python_includes indent."""
     parts = [
         "import playwright.sync_api\n",
         "from typing import Literal\n\n\n",
@@ -82,8 +82,8 @@ _PYTHON_INCLUDES = _build_python_includes()
 def webarena_action_to_python(action: str) -> str:
     """Map a high-level action string to executable Python for BrowserGym.
 
-    Reimplements HighLevelActionSet.to_python_code because browsergym-core
-    0.13.3 leaves leading whitespace in python_includes; exec then raises
+    Reimplements HighLevelActionSet.to_python_code because the browsergym-core
+    0.13.3 leaves leading whitespace in python_includes, which raises
     IndentationError on every action.
     """
     function_calls = highlevel_action_parser.search_string(action)
@@ -102,6 +102,7 @@ def webarena_action_to_python(action: str) -> str:
 
 
 def build_think_system_prompt(action_set: HighLevelActionSet) -> str:
+    "System prompt for the think node, including the list of actions."
     grammar = action_set.describe(
         with_long_description=False,
         with_examples=True,
@@ -120,7 +121,7 @@ THINK_SYSTEM_PROMPT = build_think_system_prompt(WEBARENA_ACTION_SET)
 
 
 def make_webarena_env(task_id: int, *, headless: bool = True) -> gym.Env:
-    """Open a BrowserGym WebArena env for one of the 812 tasks."""
+    """Open a BrowserGym WebArena environment for one of the 812 tasks."""
     return gym.make(
         f"browsergym/webarena.{task_id}",
         headless=headless,
@@ -130,7 +131,7 @@ def make_webarena_env(task_id: int, *, headless: bool = True) -> gym.Env:
 
 
 class WebArenaEnvWrapper:
-    """Holds a BrowserGym env and the last preprocessed obs, reward, and judge stubs."""
+    """Holds a BrowserGym environment and the last observation, reward, and judge stubs."""
 
     def __init__(self, env: gym.Env) -> None:
         self.env = env

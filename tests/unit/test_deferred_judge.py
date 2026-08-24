@@ -1,10 +1,11 @@
-"""Tests for the deferred WebArena LLM judge."""
+"""The deferred WebArena LLM judge: call capture, scoring and its CSV artefacts."""
 
 from __future__ import annotations
 
 import csv
 import json
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from unittest.mock import patch
 
@@ -24,6 +25,8 @@ from common import (  # noqa: E402
     judge_scores_path,
 )
 
+pytestmark = pytest.mark.unit
+
 
 @pytest.fixture(autouse=True)
 def _reset_shim():
@@ -32,30 +35,25 @@ def _reset_shim():
     deferred_judge.reset()
 
 
-@pytest.mark.unit
-def test_stub_fuzzy_match_returns_1_and_records() -> None:
-    result = deferred_judge._stub_fuzzy_match("pred_val", "ref_val", "intent_val")
-    assert result == 1.0
-    recorded = deferred_judge.calls()
-    assert len(recorded) == 1
-    assert recorded[0] == {
-        "kind": "fuzzy",
-        "pred": "pred_val",
-        "reference": "ref_val",
-        "intent": "intent_val",
-    }
+@pytest.mark.parametrize(
+    ("stub", "kind"),
+    [
+        (deferred_judge._stub_fuzzy_match, "fuzzy"),
+        (deferred_judge._stub_ua_match, "ua"),
+    ],
+)
+def test_stub_defers_the_call_and_returns_1(stub: Callable[..., float], kind: str) -> None:
+    assert stub("pred_val", "ref_val", "intent_val") == 1.0
+    assert deferred_judge.calls() == [
+        {
+            "kind": kind,
+            "pred": "pred_val",
+            "reference": "ref_val",
+            "intent": "intent_val",
+        }
+    ]
 
 
-@pytest.mark.unit
-def test_stub_ua_match_returns_1_and_records() -> None:
-    result = deferred_judge._stub_ua_match("pred_val", "ref_val", "intent_val")
-    assert result == 1.0
-    recorded = deferred_judge.calls()
-    assert len(recorded) == 1
-    assert recorded[0]["kind"] == "ua"
-
-
-@pytest.mark.unit
 def test_reset_clears_buffer() -> None:
     deferred_judge._stub_fuzzy_match("a", "b", "c")
     assert len(deferred_judge.calls()) == 1
@@ -63,7 +61,6 @@ def test_reset_clears_buffer() -> None:
     assert len(deferred_judge.calls()) == 0
 
 
-@pytest.mark.unit
 def test_calls_returns_copy() -> None:
     deferred_judge._stub_fuzzy_match("a", "b", "c")
     copy = deferred_judge.calls()
@@ -71,7 +68,6 @@ def test_calls_returns_copy() -> None:
     assert len(deferred_judge.calls()) == 1
 
 
-@pytest.mark.unit
 def test_install_is_idempotent() -> None:
     import types
 
@@ -100,22 +96,6 @@ def test_install_is_idempotent() -> None:
         deferred_judge._installed = saved
 
 
-class _FakeJudgeClient:
-    """Chat client that returns predetermined verdicts."""
-
-    def __init__(self, responses: list[str]) -> None:
-        self._responses = list(responses)
-        self._idx = 0
-
-    def chat(
-        self, system: str, user: str, *, temperature: float = 0.0, max_tokens: int | None = None
-    ) -> str:
-        resp = self._responses[self._idx % len(self._responses)]
-        self._idx += 1
-        return resp
-
-
-@pytest.mark.unit
 def test_score_task_single_correct() -> None:
     calls = [{"kind": "fuzzy", "pred": "3h30", "reference": "3h 30min", "intent": "How long?"}]
 
@@ -133,7 +113,6 @@ def test_score_task_single_correct() -> None:
     assert status == "scored"
 
 
-@pytest.mark.unit
 def test_score_task_single_incorrect() -> None:
     calls = [{"kind": "fuzzy", "pred": "wrong", "reference": "right", "intent": "q"}]
 
@@ -150,7 +129,6 @@ def test_score_task_single_incorrect() -> None:
     assert success is False
 
 
-@pytest.mark.unit
 def test_score_task_multi_reference_product() -> None:
     calls = [
         {"kind": "fuzzy", "pred": "a", "reference": "r1", "intent": "q"},
@@ -171,8 +149,7 @@ def test_score_task_multi_reference_product() -> None:
     assert final == 0.0
 
 
-@pytest.mark.unit
-def test_score_task_deferred_reward_zero_short_circuits() -> None:
+def test_score_task_zero_deferred_reward_wins() -> None:
     calls = [{"kind": "fuzzy", "pred": "a", "reference": "r", "intent": "q"}]
 
     def fake_score(call):
@@ -187,7 +164,6 @@ def test_score_task_deferred_reward_zero_short_circuits() -> None:
     assert success is False
 
 
-@pytest.mark.unit
 def test_score_task_unparseable_status() -> None:
     calls = [{"kind": "fuzzy", "pred": "a", "reference": "r", "intent": "q"}]
 
@@ -201,8 +177,7 @@ def test_score_task_unparseable_status() -> None:
     assert status == "unparseable"
 
 
-@pytest.mark.unit
-def test_score_task_paces_after_successful_attempt() -> None:
+def test_score_task_paces_between_calls() -> None:
     calls = [
         {"kind": "fuzzy", "pred": "a", "reference": "r1", "intent": "q"},
         {"kind": "fuzzy", "pred": "a", "reference": "r2", "intent": "q"},
@@ -222,8 +197,7 @@ def test_score_task_paces_after_successful_attempt() -> None:
     assert all(call.args[0] == 30.0 for call in sleep_mock.call_args_list)
 
 
-@pytest.mark.unit
-def test_score_task_rate_limit_retry_uses_sixty_second_floor() -> None:
+def test_score_task_rate_limit_retry_waits_a_minute() -> None:
     calls = [{"kind": "fuzzy", "pred": "a", "reference": "r", "intent": "q"}]
     results = iter(
         [
@@ -247,8 +221,7 @@ def test_score_task_rate_limit_retry_uses_sixty_second_floor() -> None:
     assert sleep_mock.call_args_list[1].args[0] == 1.0
 
 
-@pytest.mark.unit
-def test_ensure_csv_header_rejects_mismatched_header(tmp_path: Path) -> None:
+def test_ensure_csv_header_rejects_mismatch(tmp_path: Path) -> None:
     csv_path = tmp_path / "test.csv"
     old_columns = ["a", "b", "c"]
     with csv_path.open("w", encoding="utf-8", newline="") as fh:
@@ -259,8 +232,7 @@ def test_ensure_csv_header_rejects_mismatched_header(tmp_path: Path) -> None:
         ensure_csv_header(csv_path, new_columns)
 
 
-@pytest.mark.unit
-def test_ensure_csv_header_accepts_matching_header(tmp_path: Path) -> None:
+def test_ensure_csv_header_accepts_match(tmp_path: Path) -> None:
     csv_path = tmp_path / "test.csv"
     columns = ["x", "y"]
     with csv_path.open("w", encoding="utf-8", newline="") as fh:
@@ -268,7 +240,6 @@ def test_ensure_csv_header_accepts_matching_header(tmp_path: Path) -> None:
     ensure_csv_header(csv_path, columns)
 
 
-@pytest.mark.unit
 def test_ensure_csv_header_creates_new_file(tmp_path: Path) -> None:
     csv_path = tmp_path / "new.csv"
     columns = ["x", "y"]
@@ -280,19 +251,16 @@ def test_ensure_csv_header_creates_new_file(tmp_path: Path) -> None:
     assert header == columns
 
 
-@pytest.mark.unit
 def test_judge_calls_path_derivation() -> None:
     p = Path("/data/webarena/trajectories_1.csv")
     assert judge_calls_path(p) == Path("/data/webarena/trajectories_1_judge_calls.jsonl")
 
 
-@pytest.mark.unit
 def test_judge_scores_path_derivation() -> None:
     p = Path("/data/webarena/trajectories_1.csv")
     assert judge_scores_path(p) == Path("/data/webarena/trajectories_1_judge_scores.csv")
 
 
-@pytest.mark.unit
 def test_append_judge_calls_record(tmp_path: Path) -> None:
     jsonl = tmp_path / "calls.jsonl"
     append_judge_calls_record(

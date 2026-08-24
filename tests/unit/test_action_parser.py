@@ -1,4 +1,4 @@
-"""Tests for the action grammar parser."""
+"""The one-line action grammar the Playwright Think node emits."""
 
 from __future__ import annotations
 
@@ -6,8 +6,9 @@ import pytest
 
 from agent_memories.agent.playwright.actions import ActionParseError, parse_action
 
+pytestmark = pytest.mark.unit
 
-@pytest.mark.unit
+
 @pytest.mark.parametrize(
     ("line", "expected"),
     [
@@ -29,24 +30,20 @@ def test_parses_canonical_grammar(line: str, expected: dict[str, object]) -> Non
     assert parse_action(line) == expected
 
 
-@pytest.mark.unit
 def test_strips_surrounding_whitespace() -> None:
     assert parse_action("  click [e7]  ") == {"type": "click", "ref": "e7"}
 
 
-@pytest.mark.unit
 def test_type_action_supports_escaped_quotes() -> None:
     parsed = parse_action(r'type [e2] "she said \"hi\""')
     assert parsed == {"type": "fill", "ref": "e2", "value": 'she said "hi"'}
 
 
-@pytest.mark.unit
 def test_type_action_supports_escaped_backslash() -> None:
     parsed = parse_action(r'type [e2] "a\\b"')
     assert parsed == {"type": "fill", "ref": "e2", "value": "a\\b"}
 
 
-@pytest.mark.unit
 @pytest.mark.parametrize(
     "line",
     [
@@ -78,7 +75,6 @@ def test_rejects_malformed_lines(line: str) -> None:
         parse_action(line)
 
 
-@pytest.mark.unit
 def test_none_raises_parse_error() -> None:
     with pytest.raises(ActionParseError):
         parse_action(None)  # type: ignore[arg-type]

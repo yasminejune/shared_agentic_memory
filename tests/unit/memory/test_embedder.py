@@ -6,9 +6,9 @@ import pytest
 
 from agent_memories.memory import Embedder
 
+pytestmark = [pytest.mark.unit, pytest.mark.slow]
 
-@pytest.mark.slow
-@pytest.mark.unit
+
 def test_embed_returns_a_fixed_length_vector_of_floats() -> None:
     embedder = Embedder()
 
@@ -19,8 +19,6 @@ def test_embed_returns_a_fixed_length_vector_of_floats() -> None:
     assert all(isinstance(x, float) for x in vector)
 
 
-@pytest.mark.slow
-@pytest.mark.unit
 def test_same_text_gives_same_vector() -> None:
     embedder = Embedder()
 
@@ -30,8 +28,6 @@ def test_same_text_gives_same_vector() -> None:
     assert v1 == v2
 
 
-@pytest.mark.slow
-@pytest.mark.unit
 def test_embed_batch_matches_single_embed() -> None:
     embedder = Embedder()
 
@@ -42,8 +38,6 @@ def test_embed_batch_matches_single_embed() -> None:
     assert batch == singles
 
 
-@pytest.mark.slow
-@pytest.mark.unit
 def test_embed_batch_on_empty_input() -> None:
     embedder = Embedder()
 

@@ -1,4 +1,4 @@
-"""Prompt templates shared by the Amin sampler and InvisibleInk.
+"""Prompt templates shared by the both Amin et al and InvisibleInk in this implementation.
 
 GENERIC_PROMPT / wrap() ask for a short lesson paragraph given a label
 and memory items. LABEL_PROMPT / wrap_label() ask for k topic labels as

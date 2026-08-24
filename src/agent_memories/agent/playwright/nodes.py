@@ -1,7 +1,5 @@
 """LangGraph nodes bound to a Playwright page.
-
-Factories close over the page (or the LLM client) because LangGraph nodes
-only take state. Each step prints one [Observe]/[Think]/[Act] line.
+Each step prints one [Observe]/[Think]/[Act] line.
 """
 
 from __future__ import annotations

@@ -1,10 +1,12 @@
-"""Tests for sandboxed WebArena URL resolution."""
+"""Rewriting public WebArena URLs onto the local sandbox instances."""
 
 from __future__ import annotations
 
 import pytest
 
 from agent_memories.agent.browsergym.urls import instance_urls, resolve_local_url
+
+pytestmark = pytest.mark.unit
 
 SITE_URLS = {
     "reddit": "http://localhost:9999",

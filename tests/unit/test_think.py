@@ -1,4 +1,4 @@
-"""Tests for the LLM-driven Think node."""
+"""Prompt assembly, action parsing and the stuck detector in the Think node."""
 
 from __future__ import annotations
 
@@ -6,25 +6,9 @@ import pytest
 
 from agent_memories.agent.playwright.nodes import make_think
 from agent_memories.agent.state import AgentState, new_state
+from tests.conftest import FakeChatClient
 
-
-class _FakeClient:
-    """Chat client double that returns a queued reply per call."""
-
-    def __init__(self, replies: list[str]) -> None:
-        self._replies = list(replies)
-        self.calls: list[dict[str, str]] = []
-
-    def chat(
-        self,
-        system: str,
-        user: str,
-        *,
-        temperature: float = 0.0,
-        max_tokens: int | None = None,
-    ) -> str:
-        self.calls.append({"system": system, "user": user})
-        return self._replies.pop(0)
+pytestmark = pytest.mark.unit
 
 
 def _seed_state(*, aim: str = "Click Go", tree: str = "- button [ref=e1]") -> AgentState:
@@ -33,9 +17,8 @@ def _seed_state(*, aim: str = "Click Go", tree: str = "- button [ref=e1]") -> Ag
     return state
 
 
-@pytest.mark.unit
-def test_success_populates_action_and_leaves_history_for_act() -> None:
-    client = _FakeClient(["click [e1]"])
+def test_success_leaves_history_for_act() -> None:
+    client = FakeChatClient(["click [e1]"])
     think = make_think(client)
 
     result = think(_seed_state())
@@ -46,9 +29,8 @@ def test_success_populates_action_and_leaves_history_for_act() -> None:
     assert result["history"] == [], "Think should not log success; Act does that"
 
 
-@pytest.mark.unit
 def test_type_action_round_trip() -> None:
-    client = _FakeClient(['type [e7] "London"'])
+    client = FakeChatClient(['type [e7] "London"'])
     think = make_think(client)
 
     result = think(_seed_state())
@@ -56,9 +38,8 @@ def test_type_action_round_trip() -> None:
     assert result["action"] == {"type": "fill", "ref": "e7", "value": "London"}
 
 
-@pytest.mark.unit
-def test_stop_sets_done_and_appends_history_record() -> None:
-    client = _FakeClient(["stop"])
+def test_stop_sets_done_and_logs_history() -> None:
+    client = FakeChatClient(["stop"])
     think = make_think(client)
 
     result = think(_seed_state())
@@ -72,9 +53,8 @@ def test_stop_sets_done_and_appends_history_record() -> None:
     assert record["step"] == 0
 
 
-@pytest.mark.unit
-def test_parse_failure_logs_history_and_increments_step() -> None:
-    client = _FakeClient(["I'll click the button now"])
+def test_parse_failure_advances_step() -> None:
+    client = FakeChatClient(["I'll click the button now"])
     think = make_think(client)
 
     result = think(_seed_state())
@@ -88,9 +68,8 @@ def test_parse_failure_logs_history_and_increments_step() -> None:
     assert "I'll click the button now" in record["thought"]
 
 
-@pytest.mark.unit
 def test_history_is_threaded_into_next_prompt() -> None:
-    client = _FakeClient(["click [e1]"])
+    client = FakeChatClient(["click [e1]"])
     think = make_think(client)
 
     state = _seed_state()
@@ -107,7 +86,7 @@ def test_history_is_threaded_into_next_prompt() -> None:
     think(state)
 
     assert len(client.calls) == 1
-    user_prompt = client.calls[0]["user"]
+    user_prompt = str(client.calls[0]["user"])
     assert "Aim: Click Go" in user_prompt
     assert "History (most recent last):" in user_prompt
     assert "parse_failure: bad" in user_prompt
@@ -115,9 +94,8 @@ def test_history_is_threaded_into_next_prompt() -> None:
     assert "- button [ref=e1]" in user_prompt
 
 
-@pytest.mark.unit
 def test_response_is_stripped_before_parsing() -> None:
-    client = _FakeClient(["  click [e2]\n"])
+    client = FakeChatClient(["  click [e2]\n"])
     think = make_think(client)
 
     result = think(_seed_state())
@@ -125,36 +103,33 @@ def test_response_is_stripped_before_parsing() -> None:
     assert result["action"] == {"type": "click", "ref": "e2"}
 
 
-@pytest.mark.unit
 def test_scroll_and_goto_round_trip() -> None:
-    client = _FakeClient(["scroll down"])
+    client = FakeChatClient(["scroll down"])
     result = make_think(client)(_seed_state())
     assert result["action"] == {"type": "scroll", "direction": "down"}
 
-    client = _FakeClient(['goto "https://example.com"'])
+    client = FakeChatClient(['goto "https://example.com"'])
     result = make_think(client)(_seed_state())
     assert result["action"] == {"type": "goto", "url": "https://example.com"}
 
 
-@pytest.mark.unit
-def test_observation_yaml_is_truncated_in_user_prompt() -> None:
+def test_observation_yaml_is_truncated() -> None:
     from agent_memories.agent.constants import OBSERVATION_CHAR_BUDGET
 
-    client = _FakeClient(["click [e1]"])
+    client = FakeChatClient(["click [e1]"])
     huge_tree = "- node\n" * 5000  # well over the 12k character budget
     state = _seed_state(tree=huge_tree)
 
     make_think(client)(state)
 
-    user_prompt = client.calls[0]["user"]
+    user_prompt = str(client.calls[0]["user"])
     accessibility_block = user_prompt.split("Accessibility tree:\n", 1)[1]
     accessibility_block = accessibility_block.split("\n\nReply", 1)[0]
     assert len(accessibility_block) <= OBSERVATION_CHAR_BUDGET
     assert "<observation truncated" in accessibility_block
 
 
-@pytest.mark.unit
-def test_system_prompt_explains_ref_to_action_mapping() -> None:
+def test_system_prompt_explains_refs() -> None:
     from agent_memories.agent.playwright.nodes import THINK_SYSTEM_PROMPT
 
     assert "EXACTLY one line" in THINK_SYSTEM_PROMPT
@@ -164,11 +139,10 @@ def test_system_prompt_explains_ref_to_action_mapping() -> None:
     assert "MANDATORY" in THINK_SYSTEM_PROMPT
 
 
-@pytest.mark.unit
-def test_terminal_trace_is_only_observe_think_act(
+def test_terminal_trace_is_one_line(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    client = _FakeClient(["click [e1]"])
+    client = FakeChatClient(["click [e1]"])
     think = make_think(client)
 
     think(_seed_state())
@@ -177,9 +151,8 @@ def test_terminal_trace_is_only_observe_think_act(
     assert out_lines == ["[Think]: click [e1]"]
 
 
-@pytest.mark.unit
-def test_parse_failure_outcome_has_no_hint_appended() -> None:
-    client = _FakeClient(['type 7 "paper"'])
+def test_parse_failure_outcome_has_no_hint() -> None:
+    client = FakeChatClient(['type 7 "paper"'])
     think = make_think(client)
 
     result = think(_seed_state())
@@ -191,11 +164,10 @@ def test_parse_failure_outcome_has_no_hint_appended() -> None:
     assert "hint" not in outcome.lower()
 
 
-@pytest.mark.unit
-def test_retrieved_memories_appear_in_user_prompt_with_paper_instruction() -> None:
+def test_retrieved_memories_appear_in_prompt() -> None:
     from agent_memories.agent.constants import MEMORY_INJECTION_INSTRUCTION
 
-    client = _FakeClient(["click [e1]"])
+    client = FakeChatClient(["click [e1]"])
     state = _seed_state()
     state["memories"] = [
         {
@@ -210,7 +182,7 @@ def test_retrieved_memories_appear_in_user_prompt_with_paper_instruction() -> No
 
     make_think(client)(state)
 
-    user_prompt = client.calls[0]["user"]
+    user_prompt = str(client.calls[0]["user"])
     assert MEMORY_INJECTION_INSTRUCTION in user_prompt
     assert "Title: Dismiss cookie banners early" in user_prompt
     assert "Content: Dismiss the cookie banner before searching." in user_prompt
@@ -222,21 +194,19 @@ def test_retrieved_memories_appear_in_user_prompt_with_paper_instruction() -> No
     assert aim_index < memories_index < history_index
 
 
-@pytest.mark.unit
 def test_empty_memories_list_omits_memory_block() -> None:
     from agent_memories.agent.constants import MEMORY_INJECTION_INSTRUCTION
 
-    client = _FakeClient(["click [e1]"])
+    client = FakeChatClient(["click [e1]"])
     state = _seed_state()
     state["memories"] = []
 
     make_think(client)(state)
 
-    user_prompt = client.calls[0]["user"]
+    user_prompt = str(client.calls[0]["user"])
     assert MEMORY_INJECTION_INSTRUCTION not in user_prompt
 
 
-@pytest.mark.unit
 def test_memory_injection_instruction_is_paper_verbatim() -> None:
     from agent_memories.agent.constants import MEMORY_INJECTION_INSTRUCTION
 
@@ -250,9 +220,8 @@ def test_memory_injection_instruction_is_paper_verbatim() -> None:
     assert MEMORY_INJECTION_INSTRUCTION == expected
 
 
-@pytest.mark.unit
-def test_memory_description_field_is_not_shown_to_think() -> None:
-    client = _FakeClient(["click [e1]"])
+def test_memory_description_is_not_shown() -> None:
+    client = FakeChatClient(["click [e1]"])
     state = _seed_state()
     state["memories"] = [
         {
@@ -263,13 +232,12 @@ def test_memory_description_field_is_not_shown_to_think() -> None:
 
     make_think(client)(state)
 
-    user_prompt = client.calls[0]["user"]
+    user_prompt = str(client.calls[0]["user"])
     assert "Description:" not in user_prompt
 
 
-@pytest.mark.unit
-def test_stuck_detector_aborts_on_repeated_parse_failures() -> None:
-    client = _FakeClient([])  # unused: stuck path does not call chat
+def test_stuck_on_repeated_parse_failures() -> None:
+    client = FakeChatClient([])  # unused: stuck path does not call chat
     think = make_think(client, stuck_threshold=5)
 
     state = _seed_state()
@@ -291,9 +259,8 @@ def test_stuck_detector_aborts_on_repeated_parse_failures() -> None:
     assert result["action"] == {}
 
 
-@pytest.mark.unit
-def test_stuck_detector_aborts_on_repeated_successful_acts() -> None:
-    client = _FakeClient([])
+def test_stuck_on_repeated_successful_acts() -> None:
+    client = FakeChatClient([])
     think = make_think(client, stuck_threshold=5)
 
     state = _seed_state()
@@ -314,9 +281,8 @@ def test_stuck_detector_aborts_on_repeated_successful_acts() -> None:
     assert "stuck" in result["history"][-1]["outcome"]
 
 
-@pytest.mark.unit
-def test_stuck_detector_threshold_is_configurable() -> None:
-    client = _FakeClient(["click [e1]"])
+def test_stuck_threshold_is_configurable() -> None:
+    client = FakeChatClient(["click [e1]"])
     think = make_think(client, stuck_threshold=3)
 
     state_below = _seed_state()
@@ -335,9 +301,8 @@ def test_stuck_detector_threshold_is_configurable() -> None:
     assert len(client.calls) == 1, "stuck must not consult the LLM again"
 
 
-@pytest.mark.unit
-def test_stuck_detector_ignores_non_consecutive_repeats() -> None:
-    client = _FakeClient(["click [e1]"])
+def test_stuck_ignores_non_consecutive_repeats() -> None:
+    client = FakeChatClient(["click [e1]"])
     think = make_think(client, stuck_threshold=5)
 
     state = _seed_state()
@@ -356,7 +321,6 @@ def test_stuck_detector_ignores_non_consecutive_repeats() -> None:
     assert len(client.calls) == 1, "non-consecutive repeats must not trip the detector"
 
 
-@pytest.mark.unit
 def test_chat_exception_propagates() -> None:
     class _BoomClient:
         def chat(self, system: str, user: str, *, temperature: float = 0.0) -> str:

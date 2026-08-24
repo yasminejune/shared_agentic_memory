@@ -1,4 +1,4 @@
-"""Action grammar, parser, and dispatch for the Act node.
+"""Action set, parser, and dispatch for the Act node.
 
 Selector-based actions serve the scripted Think path; ARIA-ref actions
 are what the LLM emits. stop is consumed by Think, not the dispatcher.

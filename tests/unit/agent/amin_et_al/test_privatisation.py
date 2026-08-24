@@ -1,4 +1,4 @@
-"""Tests for Amin et al. Algorithm 1 with monkeypatched token plumbing."""
+"""Amin et al. Algorithm 1, with the token plumbing monkeypatched out."""
 
 from __future__ import annotations
 

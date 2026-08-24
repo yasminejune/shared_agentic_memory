@@ -1,4 +1,4 @@
-"""Tests for OllamaClient using httpx.MockTransport."""
+"""Request payload and error propagation for OllamaClient, over a mock transport."""
 
 from __future__ import annotations
 
@@ -10,29 +10,33 @@ import pytest
 
 from agent_memories.services.ollama_client import OllamaClient
 
+pytestmark = pytest.mark.unit
 
-def _make_client_with_mock(
-    handler: Any,
-) -> OllamaClient:
-    client = OllamaClient(model="qwen3:8b", seed=3006)
+
+def _client_with(handler: Any, **kwargs: Any) -> OllamaClient:
+    """Client whose HTTP transport is swapped for the given handler."""
+    kwargs.setdefault("model", "qwen3:8b")
+    kwargs.setdefault("seed", 3006)
+    client = OllamaClient(**kwargs)
     client._http.close()
     client._http = httpx.Client(transport=httpx.MockTransport(handler))
     return client
 
 
-@pytest.mark.unit
-def test_chat_returns_completion_on_success() -> None:
-    captured: dict[str, Any] = {}
+def _capture(captured: dict[str, Any], content: str = "ok") -> Any:
+    """Handler that records the outgoing request and replies with content."""
 
     def handler(request: httpx.Request) -> httpx.Response:
         captured["url"] = str(request.url)
         captured["json"] = json.loads(request.content)
-        return httpx.Response(
-            200,
-            json={"message": {"role": "assistant", "content": "click [e1]"}},
-        )
+        return httpx.Response(200, json={"message": {"role": "assistant", "content": content}})
 
-    client = _make_client_with_mock(handler)
+    return handler
+
+
+def test_chat_returns_completion_on_success() -> None:
+    captured: dict[str, Any] = {}
+    client = _client_with(_capture(captured, "click [e1]"))
 
     result = client.chat("sys", "usr")
 
@@ -41,36 +45,35 @@ def test_chat_returns_completion_on_success() -> None:
     assert captured["json"]["model"] == "qwen3:8b"
     assert captured["json"]["think"] is False
     assert captured["json"]["stream"] is False
-    assert captured["json"]["options"]["num_predict"] == 64
-    assert captured["json"]["options"]["temperature"] == 0.0
-    assert captured["json"]["options"]["seed"] == 3006
+    assert captured["json"]["options"] == {"num_predict": 64, "temperature": 0.0, "seed": 3006}
     assert captured["json"]["messages"] == [
         {"role": "system", "content": "sys"},
         {"role": "user", "content": "usr"},
     ]
 
 
-@pytest.mark.unit
-def test_think_true_is_sent_in_payload() -> None:
+def test_constructor_options_reach_the_payload() -> None:
     captured: dict[str, Any] = {}
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        captured["json"] = json.loads(request.content)
-        return httpx.Response(
-            200,
-            json={"message": {"role": "assistant", "content": "click('53')"}},
-        )
-
-    client = OllamaClient(model="qwen3:8b", seed=3006, think=True)
-    client._http.close()
-    client._http = httpx.Client(transport=httpx.MockTransport(handler))
+    client = _client_with(_capture(captured), seed=99, num_predict=128, think=True)
 
     client.chat("sys", "usr")
 
     assert captured["json"]["think"] is True
+    assert captured["json"]["options"]["num_predict"] == 128
+    assert captured["json"]["options"]["seed"] == 99
 
 
-@pytest.mark.unit
+def test_max_tokens_kwarg_overrides_constructor_default() -> None:
+    captured: dict[str, Any] = {}
+    client = _client_with(_capture(captured))
+
+    client.chat("sys", "usr")
+    assert captured["json"]["options"]["num_predict"] == 64
+
+    client.chat("sys", "usr", max_tokens=512)
+    assert captured["json"]["options"]["num_predict"] == 512
+
+
 def test_chat_ignores_thinking_field_and_returns_content() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
@@ -84,127 +87,27 @@ def test_chat_ignores_thinking_field_and_returns_content() -> None:
             },
         )
 
-    client = _make_client_with_mock(handler)
-
-    assert client.chat("sys", "usr") == "click('53')"
+    assert _client_with(handler).chat("sys", "usr") == "click('53')"
 
 
-@pytest.mark.unit
 def test_chat_returns_empty_string_when_content_missing() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"message": {"role": "assistant"}})
 
-    client = _make_client_with_mock(handler)
-
-    assert client.chat("sys", "usr") == ""
+    assert _client_with(handler).chat("sys", "usr") == ""
 
 
-@pytest.mark.unit
-def test_chat_propagates_http_404_without_retry() -> None:
+@pytest.mark.parametrize("status_code", [404, 500])
+def test_chat_propagates_http_errors_without_retry(status_code: int) -> None:
     attempts = {"n": 0}
 
     def handler(request: httpx.Request) -> httpx.Response:
         attempts["n"] += 1
-        return httpx.Response(
-            404,
-            json={"error": "model 'qwen3:8b' not found"},
-        )
+        return httpx.Response(status_code, json={"error": "boom"})
 
-    client = _make_client_with_mock(handler)
+    client = _client_with(handler)
 
     with pytest.raises(httpx.HTTPStatusError):
         client.chat("sys", "usr")
 
     assert attempts["n"] == 1
-
-
-@pytest.mark.unit
-def test_chat_propagates_http_500_without_retry() -> None:
-    attempts = {"n": 0}
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        attempts["n"] += 1
-        return httpx.Response(500, json={"error": "boom"})
-
-    client = _make_client_with_mock(handler)
-
-    with pytest.raises(httpx.HTTPStatusError):
-        client.chat("sys", "usr")
-
-    assert attempts["n"] == 1
-
-
-@pytest.mark.unit
-def test_num_predict_is_configurable() -> None:
-    captured: dict[str, Any] = {}
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        captured["json"] = json.loads(request.content)
-        return httpx.Response(
-            200,
-            json={"message": {"role": "assistant", "content": "stop"}},
-        )
-
-    client = OllamaClient(model="qwen3:8b", seed=3006, num_predict=128)
-    client._http.close()
-    client._http = httpx.Client(transport=httpx.MockTransport(handler))
-
-    client.chat("sys", "usr")
-
-    assert captured["json"]["options"]["num_predict"] == 128
-
-
-@pytest.mark.unit
-def test_chat_max_tokens_kwarg_overrides_constructor_default() -> None:
-    captured: dict[str, Any] = {}
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        captured["json"] = json.loads(request.content)
-        return httpx.Response(
-            200,
-            json={"message": {"role": "assistant", "content": "ok"}},
-        )
-
-    client = _make_client_with_mock(handler)
-
-    client.chat("sys", "usr", max_tokens=512)
-
-    assert captured["json"]["options"]["num_predict"] == 512
-
-
-@pytest.mark.unit
-def test_chat_max_tokens_none_falls_back_to_constructor_default() -> None:
-    captured: dict[str, Any] = {}
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        captured["json"] = json.loads(request.content)
-        return httpx.Response(
-            200,
-            json={"message": {"role": "assistant", "content": "ok"}},
-        )
-
-    client = _make_client_with_mock(handler)
-
-    client.chat("sys", "usr")
-
-    assert captured["json"]["options"]["num_predict"] == 64
-
-
-@pytest.mark.unit
-def test_chat_includes_seed_in_options() -> None:
-    captured: dict[str, Any] = {}
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        captured["json"] = json.loads(request.content)
-        return httpx.Response(
-            200,
-            json={"message": {"role": "assistant", "content": "ok"}},
-        )
-
-    client = OllamaClient(model="qwen3:8b", seed=99)
-    client._http.close()
-    client._http = httpx.Client(transport=httpx.MockTransport(handler))
-
-    client.chat("sys", "usr")
-
-    assert captured["json"]["options"]["seed"] == 99

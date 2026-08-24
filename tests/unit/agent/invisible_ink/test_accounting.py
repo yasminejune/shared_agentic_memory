@@ -1,4 +1,4 @@
-"""Tests for InvisibleInk privacy accounting."""
+"""InvisibleInk privacy accounting: Theorem 2 clipping and its epsilon."""
 
 from __future__ import annotations
 

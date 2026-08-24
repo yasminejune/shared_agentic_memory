@@ -1,4 +1,4 @@
-"""Tests for BrowserGym WebArena action parsing."""
+"""Recovering a single BrowserGym action from a raw model reply."""
 
 from __future__ import annotations
 
@@ -10,6 +10,8 @@ from agent_memories.agent.browsergym.actions import (
     parse_action,
 )
 from agent_memories.agent.browsergym.env import THINK_SYSTEM_PROMPT
+
+pytestmark = pytest.mark.unit
 
 
 def test_parse_click() -> None:

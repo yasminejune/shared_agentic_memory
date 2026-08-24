@@ -1,4 +1,4 @@
-"""Tests for the shared-memory pipeline entry point."""
+"""Ordering and failure handling across the four shared-memory steps."""
 
 from __future__ import annotations
 

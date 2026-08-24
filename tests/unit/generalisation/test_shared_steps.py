@@ -1,4 +1,4 @@
-"""Tests for the InvisibleInk shared-memory step functions."""
+"""Step functions behind the InvisibleInk shared-memory pipeline."""
 
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ from agent_memories.generalisation.step2_assignment import run_assignment
 from agent_memories.generalisation.step3_content import run_content_generation
 from agent_memories.generalisation.step4_store import run_store_write
 from agent_memories.memory import MemoryEntry, MemoryItem, MemoryStore
+from tests.conftest import FakeChatClient, FakeEmbedder
 
 pytestmark = pytest.mark.unit
 
@@ -63,35 +64,7 @@ def _entry(
     )
 
 
-class _FakeEmbedder:
-    """Maps known label strings to axis-aligned vectors."""
-
-    def embed(self, text: str) -> list[float]:
-        if text == "label-a":
-            return [1.0, 0.0]
-        if text == "label-b":
-            return [0.0, 1.0]
-        return [1.0, 0.0]
-
-    def embed_batch(self, texts: list[str]) -> list[list[float]]:
-        return [self.embed(text) for text in texts]
-
-
-class _FakeClient:
-    def __init__(self, reply: str) -> None:
-        self.reply = reply
-        self.calls: list[tuple[str, str]] = []
-
-    def chat(
-        self,
-        system: str,
-        user: str,
-        *,
-        temperature: float = 0.0,
-        max_tokens: int | None = None,
-    ) -> str:
-        self.calls.append((system, user))
-        return self.reply
+LABEL_VECTORS = {"label-a": [1.0, 0.0], "label-b": [0.0, 1.0]}
 
 
 def test_step1_prompts_use_query_not_items() -> None:
@@ -130,7 +103,7 @@ def test_step2_gates_at_seven(tmp_path: Path) -> None:
     artefact = run_assignment(
         a_entries + b_entries,
         labels,
-        embedder=_FakeEmbedder(),
+        embedder=FakeEmbedder(LABEL_VECTORS),
         x_per_label=7,
     )
     assert artefact["triggered_labels"] == [0]
@@ -230,8 +203,8 @@ def test_step3_splits_large_buckets(n: int, expected_sizes: list[int]) -> None:
 
 
 def test_step4_writes_shared_store(tmp_path: Path) -> None:
-    client = _FakeClient(
-        "Title: Confirm Venue Before Paying\n" "Description: Check the issuer page before paying.\n"
+    client = FakeChatClient(
+        ["Title: Confirm Venue Before Paying\nDescription: Check the issuer page before paying.\n"]
     )
     records = [
         {
@@ -244,10 +217,10 @@ def test_step4_writes_shared_store(tmp_path: Path) -> None:
         records,
         shared_path=store_path,
         client=client,
-        embedder=_FakeEmbedder(),
+        embedder=FakeEmbedder(LABEL_VECTORS),
     )
     assert written[0]["title"] == "Confirm Venue Before Paying"
-    store = MemoryStore.load(store_path, user_id="shared", embedder=_FakeEmbedder())
+    store = MemoryStore.load(store_path, user_id="shared", embedder=FakeEmbedder(LABEL_VECTORS))
     assert len(store) == 1
     entry = store.all()[0]
     assert entry.query == "label-a"

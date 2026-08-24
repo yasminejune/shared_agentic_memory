@@ -1,7 +1,5 @@
-"""Stub the WebArena LLM judge during a run and record its inputs.
-
-fuzzy_match and ua_match return 1.0 so the harness product is not lost.
-The real (pred, reference, intent) triples are written out and scored later.
+"""Since checking answers is computationally expensive, this script prevents any fuzzy or unachievable
+checks to be run during a run-through. Instead, they are run at a later stage.
 """
 
 from __future__ import annotations
@@ -37,7 +35,7 @@ def _stub_ua_match(pred: str, reference: str, question: str) -> float:
 
 
 def install() -> None:
-    """Patch evaluators.llm_fuzzy_match / llm_ua_match. Call after prepare_webarena."""
+    """Replaces WebArena's LLM judge (costly) with a stub that records the inputs."""
     global _installed
     if _installed:
         return

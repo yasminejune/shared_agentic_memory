@@ -1,10 +1,13 @@
-"""Tests for WP2 checkpoint defaults and entry-level gating."""
+"""WP2 checkpoint defaults and the x-per-label gate."""
 
 from __future__ import annotations
 
+import pytest
 from scripts.memories.WP2_pipeline import _load_checkpoint
 
 from agent_memories.generalisation import select_round2_inputs
+
+pytestmark = pytest.mark.unit
 
 
 def test_fresh_checkpoint_uses_entry_level_schema(tmp_path) -> None:

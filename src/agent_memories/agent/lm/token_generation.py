@@ -1,9 +1,9 @@
-"""Gemma 2 2B IT logit wrapper shared by the Amin sampler and InvisibleInk.
+"""Gemma 2 2B IT logit wrapper shared by Amin et al and InvisibleInk.
 
-Loads ``google/gemma-2-2b-it`` lazily in bfloat16 on MPS, applies the
+Loads ``google/gemma-2-2b-it`` in bfloat16 on MPS, applies the
 chat template, and returns last-position logits as float32. Prefill
-plus one-token continuation reuse the KV cache so the sampling loop
-does not re-attend the prompt prefix each step. set_model() swaps the
+plus one-token continuation reuses the KV cache so the sampling loop
+does not re-calculate the prompt prefix each step. set_model() swaps the
 HuggingFace id (IT-vs-base comparison).
 """
 

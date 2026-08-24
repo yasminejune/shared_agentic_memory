@@ -1,4 +1,4 @@
-"""Tests for InvisibleInk DClip and Top-k+ primitives."""
+"""The DClip mean and Top-k+ selection that InvisibleInk samples from."""
 
 from __future__ import annotations
 

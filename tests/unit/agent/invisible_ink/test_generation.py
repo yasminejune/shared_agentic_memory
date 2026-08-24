@@ -1,4 +1,4 @@
-"""Tests for InvisibleInk Algorithm 1 with monkeypatched token plumbing."""
+"""InvisibleInk Algorithm 1, with the token plumbing monkeypatched out."""
 
 from __future__ import annotations
 

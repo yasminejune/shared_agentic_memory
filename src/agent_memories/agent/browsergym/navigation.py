@@ -7,6 +7,7 @@ from typing import Any
 # BrowserGym injects the live Playwright page into this name at exec time.
 page: Any = None
 
+
 # This makes sure that the page doesn't go to the real website but the local copy of it
 def goto(url: str) -> None:
     """

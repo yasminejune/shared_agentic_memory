@@ -1,4 +1,4 @@
-"""Rewrite public WebArena hosts onto the local instance."""
+"""Rewrite public WebArena hosts onto the local instance so the agent does not falsely attempt tonavigate online"""
 
 from __future__ import annotations
 
@@ -36,9 +36,9 @@ _SITE_ENV_KEYS: dict[str, str] = {
 
 
 def _normalise_host(netloc: str) -> str:
+    """Identify the website host from the url"""
     host = netloc.lower().split("@")[-1]
     if host.startswith("[") and "]" in host:
-        # IPv6 literal: keep as-is up to the closing bracket / port.
         return host
     host = host.split(":")[0]
     if host.startswith("www."):
@@ -58,7 +58,7 @@ def _is_on_instance(netloc: str, site_urls: dict[str, str], home_url: str) -> bo
 
 
 def resolve_local_url(url: str, site_urls: dict[str, str], home_url: str) -> str:
-    """Map a navigation target onto the local WebArena instance.
+    """Map a navigation target to the local WebArena instance.
 
     URLs already on the instance pass through. Hosts in SITE_HOSTS keep path
     and query on the matching site origin. Anything else becomes home_url.

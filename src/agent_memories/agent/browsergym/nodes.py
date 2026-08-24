@@ -1,4 +1,4 @@
-"""Observe, Think, and Act nodes for the BrowserGym WebArena loop."""
+"""The three nodes for the ReAct loop in the BrowserGym WebArena."""
 
 from __future__ import annotations
 
@@ -26,6 +26,7 @@ def _trace(line: str) -> None:
     print(line, flush=True)
 
 
+# Observe node
 def make_observe(wrapper: WebArenaEnvWrapper) -> NodeFn:
     """Copy url, title, and tree_yaml from the wrapper's last observation."""
 
@@ -48,12 +49,13 @@ def make_observe(wrapper: WebArenaEnvWrapper) -> NodeFn:
     return observe
 
 
+# Think node
 def make_think(
     client: ChatClient,
     *,
     stuck_threshold: int = DEFAULT_STUCK_THRESHOLD,
 ) -> NodeFn:
-    """Call Qwen and parse one BrowserGym action line from the reply."""
+    """Call Qwen to generate a thought, then parse one BrowserGym action line from the reply."""
 
     def think(state: AgentState) -> AgentState:
         if _is_stuck(state["history"], stuck_threshold):
@@ -77,8 +79,9 @@ def make_think(
     return think
 
 
+# Act node
 def make_act(wrapper: WebArenaEnvWrapper) -> NodeFn:
-    """Run env.step. Exceptions are not caught; the runner treats them as infra errors."""
+    """Take the action proposed by the thought node"""
 
     def act(state: AgentState) -> AgentState:
         action_obj = state.get("action", {})
@@ -117,6 +120,7 @@ def _is_stuck(history: list[dict[str, Any]], threshold: int) -> bool:
 
 
 def _record_stuck_abort(state: AgentState, *, threshold: int) -> AgentState:
+    """Abort the loop if the agent has attempted to repeat the same action too many times"""
     _trace(f"[Think]: (stuck-detector aborted run after {threshold} identical replies)")
     record = {
         "step": state["step"],
@@ -134,6 +138,7 @@ def _record_stuck_abort(state: AgentState, *, threshold: int) -> AgentState:
 
 
 def _record_think_failure(state: AgentState, *, raw: str, outcome: str) -> AgentState:
+    """If unable to think, record the failure and continue."""
     record = {
         "step": state["step"],
         "thought": raw,
@@ -150,6 +155,7 @@ def _record_think_failure(state: AgentState, *, raw: str, outcome: str) -> Agent
 
 
 def _build_user_prompt(state: AgentState) -> str:
+    """Build the user prompt for the think node."""
     tree_yaml = state.get("observation", {}).get("tree_yaml", "")
     capped_tree = _truncate_observation(tree_yaml, OBSERVATION_CHAR_BUDGET)
     sections: list[str] = [f"Aim: {state['aim']}"]
@@ -172,6 +178,7 @@ def _build_user_prompt(state: AgentState) -> str:
 
 
 def _format_memories(memories: list[dict[str, str]]) -> str:
+    """Format the memories for the think node. Only include the title and content."""
     rendered: list[str] = []
     for item in memories:
         title = item.get("title", "").strip()
@@ -189,6 +196,7 @@ def _truncate_observation(tree_yaml: str, budget: int) -> str:
 
 
 def _format_history(history: list[dict[str, Any]]) -> str:
+    """Format the history for the think node."""
     if not history:
         return "(no prior steps)"
     lines = []
@@ -214,6 +222,7 @@ def extract_bot_response(state: AgentState) -> str:
 
 
 def _extract_string_arg(call: str, func_name: str) -> str:
+    """Extract the string argument from the call to the function."""
     prefix = f"{func_name}("
     if not call.startswith(prefix) or not call.endswith(")"):
         return "N/A"
