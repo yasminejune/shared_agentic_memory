@@ -95,11 +95,11 @@ def _coerce_outcome(raw: Any) -> Outcome:
     Unrecognised values become failed. shared is kept so the
     cross-user store round-trips through load.
     """
-    if raw == "successful": # I.e. successful private memories
+    if raw == "successful":  # I.e. successful private memories
         return "successful"
-    if raw == "shared": # I.e. shared memories (non-private)
+    if raw == "shared":  # I.e. shared memories (non-private)
         return "shared"
-    return "failed" # I.e. failed private memories
+    return "failed"  # I.e. failed private memories
 
 
 def _utcnow_iso() -> str:

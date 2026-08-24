@@ -123,7 +123,7 @@ def delta_from_rho_epsilon(rho: float, epsilon: float) -> float:
     """Tight delta from Amin Theorem 1 first statement.
 
     Smallest delta for which Algorithm 1 is (epsilon, delta)-DP
-    at this rho. 
+    at this rho.
     """
     if rho <= 0.0:
         return 0.0
@@ -144,8 +144,7 @@ def delta_from_rho_epsilon(rho: float, epsilon: float) -> float:
 
 @dataclass(frozen=True)
 class DeltaCheck:
-    """Diagnostic result for check_delta.
-    """
+    """Diagnostic result for check_delta."""
 
     delta_chosen: float
     rho: float
@@ -159,8 +158,8 @@ class DeltaCheck:
 
     @property
     def valid(self) -> bool:
-        # Checks considitions of delta: 
-        # valid is the conjunction. 
+        # Checks considitions of delta:
+        # valid is the conjunction.
         # delta_min is the Theorem 1 tight bound;
         # delta_max_convention is Appendix C's 1 / n
         return self.delta_in_domain and self.delta_meets_theorem1 and self.delta_within_n_bound

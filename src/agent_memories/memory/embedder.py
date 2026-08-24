@@ -1,6 +1,6 @@
 """Sentence-transformers wrapper. Default model is all-MiniLM-L6-v2.
 
-The rest of the codebase never imports the library directly. 
+The rest of the codebase never imports the library directly.
 """
 
 from __future__ import annotations

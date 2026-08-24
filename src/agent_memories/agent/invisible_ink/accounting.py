@@ -1,10 +1,10 @@
 """InvisibleInk wrappers around invink.utils.
 
-B is used to mean both the batch size and the private-reference count in the InvisibleInk repo. 
+B is used to mean both the batch size and the private-reference count in the InvisibleInk repo.
 Thus we differentiate here:
 * get_clip and get_epsilon take B+1 (inferences per token,
-including the public prompt). 
-* compute_rho takes B, the private-reference count. 
+including the public prompt).
+* compute_rho takes B, the private-reference count.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ class InvisibleInkAccount:
     """Result of one run of InvisibleInk Algorithm 1.
 
     Every generated token spends budget. t is the
-    length of the generated text in tokens, used to calibrate c; 
+    length of the generated text in tokens, used to calibrate c;
     tokens_used is the realised length (may be lower if a stop token arrived early).
     """
 

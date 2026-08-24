@@ -85,7 +85,7 @@ def generate(
     """Run Amin et al. Algorithm 1 on one batch.
 
     The texts are pre-rendered items blocks.
-    Wrap_fn fills the template with the text. 
+    Wrap_fn fills the template with the text.
     The public prompt is wrap_fn with no items, so the slot is "(no examples)"
     delta defaults to 1 / s.
     Returns the decoded string and a PrivacyAccount.

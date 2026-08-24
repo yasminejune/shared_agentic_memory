@@ -48,7 +48,7 @@ def select_round2_inputs(
 
     buckets[k] is the list of batch indices assigned to label k.
     """
-    if x_per_label < 1: # x_per_label has to be positive
+    if x_per_label < 1:  # x_per_label has to be positive
         raise ValueError(f"x_per_label must be >= 1; got {x_per_label}.")
 
     label_inputs: list[list[int] | None] = []

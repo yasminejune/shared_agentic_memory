@@ -54,7 +54,7 @@ def set_model(name: str) -> None:
 
 def encode(text: str) -> list[int]:
     """Tokenise the text into a flat list of token ids."""
-    _load() # Loads the gemma model and tokenizer
+    _load()  # Loads the gemma model and tokenizer
     ids: list[int] = _tokenizer(text, return_tensors=None, add_special_tokens=True)["input_ids"]
     return ids
 
@@ -93,14 +93,14 @@ def eos_id() -> int:
 def stop_ids() -> set[int]:
     """Token ids that should terminate generation.
 
-    Includes eos, and for the instruction-tuned Gemma, it also includes 
+    Includes eos, and for the instruction-tuned Gemma, it also includes
     ``<end_of_turn>``.
     """
     _load()
     ids: set[int] = set()
     if _tokenizer.eos_token_id is not None:
         ids.add(int(_tokenizer.eos_token_id))
-    if MODEL_NAME.split("/")[-1].endswith("-it"): # I.e. is the Gemma IT model
+    if MODEL_NAME.split("/")[-1].endswith("-it"):  # I.e. is the Gemma IT model
         end_of_turn = _tokenizer.convert_tokens_to_ids("<end_of_turn>")
         if isinstance(end_of_turn, int) and end_of_turn != _tokenizer.unk_token_id:
             ids.add(end_of_turn)
@@ -163,8 +163,7 @@ def get_next_token_logits_from_ids(prompt_ids: list[list[int]]) -> torch.Tensor:
 
 @dataclass
 class PrefillState:
-    """KV-cache and running attention mask from prefill_padded.
-    """
+    """KV-cache and running attention mask from prefill_padded."""
 
     past_key_values: Any
     attention_mask: torch.Tensor
@@ -203,8 +202,7 @@ def continue_batched(
     state: PrefillState,
     new_token_ids: list[int],
 ) -> tuple[torch.Tensor, PrefillState]:
-    """One-token continuation from cached K/V; return new logits and state.
-    """
+    """One-token continuation from cached K/V; return new logits and state."""
     _load()
     batch_size = len(new_token_ids)
     input_ids = torch.tensor(new_token_ids, dtype=torch.long).unsqueeze(-1).to("mps")

@@ -1,6 +1,6 @@
 """Amin et al. (2024) Algorithm 1 sampler and its zCDP accountant.
 
-DP over a batch of s private prompts, with a 
+DP over a batch of s private prompts, with a
 check that falls back to a public prompt when the private and public next
 token distributions agree. Shares the Gemma wrapper and prompt templates
 with agent/lm/.

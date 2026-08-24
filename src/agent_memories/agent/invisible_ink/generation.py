@@ -93,7 +93,7 @@ def _sample_one_token(
     tau: float,
     top_k: int,
 ) -> tuple[int, int, bool]:
-    """DClip + Top-k+ sample; return the token_id, the size of the expanded vocabulary |V_k+|, 
+    """DClip + Top-k+ sample; return the token_id, the size of the expanded vocabulary |V_k+|,
     and whether the token was in the expansion set (expansion_hit)."""
     mask, expansion_idxs = top_k_plus_mask(z_pub, k=top_k, c=c, b=b)
     phi_bar = dclip_mean(z_private, z_pub, c)

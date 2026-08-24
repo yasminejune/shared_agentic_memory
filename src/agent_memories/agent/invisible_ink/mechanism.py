@@ -1,5 +1,4 @@
-"""DClip and Top-k+ primitives for InvisibleInk Algorithm 1.
-"""
+"""DClip and Top-k+ primitives for InvisibleInk Algorithm 1."""
 
 from __future__ import annotations
 
@@ -32,7 +31,7 @@ def top_k_plus_mask(
     """Boolean Top-k+ mask and expansion-band indices from public logits.
 
     When k covers the full vocabulary the mask is all-ones and the
-    expansion index array is empty. 
+    expansion index array is empty.
     Otherwise calls get_topk in line with the paper.
     Returns (mask, expansion_idxs), where expansion_idxs
     are the indices between the top-k threshold and the expanded
@@ -47,8 +46,7 @@ def top_k_plus_mask(
 
 
 def sample_topk_plus(phi_bar: torch.Tensor, mask: torch.Tensor, tau: float) -> int:
-    """Softmax-sample one token from the Top-k+ support only.
-    """
+    """Softmax-sample one token from the Top-k+ support only."""
     masked = phi_bar.masked_fill(~mask, float("-inf"))
     probs = torch.softmax(masked / tau, dim=-1)
     return int(torch.multinomial(probs, num_samples=1).item())
