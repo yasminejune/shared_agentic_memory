@@ -1,0 +1,42 @@
+cff-version: 1.2.0
+message: If you use this software, please cite it using these metadata.
+title: shared-memories-for-agents
+abstract: >-
+  Implementation of shared memories for LLM-based web agents: a LangGraph
+  Observe-Think-Act loop that writes per-user private memories, then an
+  InvisibleInk pipeline that releases a shared store under differential
+  privacy, evaluated on WebArena.
+type: software
+version: 0.1.0
+license: GPL-3.0-only
+authors:
+  - family-names: Frizlen
+    given-names: Yasmine
+    affiliation: University of Essex
+keywords:
+  - differential privacy
+  - LLM agents
+  - agent memory
+  - WebArena
+references:
+  - type: conference-paper
+    title: >-
+      InvisibleInk: High-Utility and Low-Cost Text Generation with
+      Differential Privacy
+    authors:
+      - family-names: Vinod
+        given-names: Vishnu
+      - family-names: Pillutla
+        given-names: Krishna
+      - family-names: Guha Thakurta
+        given-names: Abhradeep
+    collection-title: Advances in Neural Information Processing Systems
+    year: 2025
+    identifiers:
+      - type: other
+        value: arXiv:2507.02974
+    notes: >-
+      Algorithm 1 is the basis of the differentially private generation in
+      src/agent_memories/agent/invisible_ink/. The authors' invink package
+      supplies the difference clipping, Top-k+ and zCDP accounting
+      primitives.

@@ -1,3 +1,9 @@
+"""Conditional LangGraph: weather node, then rainy or sunny.
+
+Coin-flip branch, not an LLM. Wanted to see add_conditional_edges
+before putting a real Think node behind it.
+"""
+
 import random
 from typing import Literal
 

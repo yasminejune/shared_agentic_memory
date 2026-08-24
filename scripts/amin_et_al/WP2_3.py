@@ -1,40 +1,24 @@
-"""WP2.3 standalone smoke harness for Amin et al. Algorithm 1.
+"""Amin et al. Algorithm 1 on the 10 toy memories in examples.csv.
 
-Reads 10 toy examples from ``scripts/amin_et_al/examples.csv`` and
-calls :func:`agent_memories.agent.privacy.generate` once to produce a
-single differentially-private synthetic sentence at the script's
-``EPSILON`` constant and ``delta = 1 / n`` (the Amin et al. 2024
-Appendix C convention; with ``n = 10`` toy examples this is
-``delta = 0.1``). Prints the resulting text and the
-privacy account. Prompt wrapping is handled inside ``generate`` via
-:data:`agent_memories.agent.privacy.prompts.GENERIC_PROMPT`; this
-script pre-renders each CSV row as a one-line memory-items block
-(the raw review text, since the toy fixture has no title or
-description fields under the WP2-plan §3.3 content-only template)
-and supplies the static :data:`LABEL` that stands in for what WP2
-round 1 would otherwise produce.
-
-This script is intentionally not wired into the real per-user memories
-or the WP2 generalisation pipeline; the CSV loader exists *only* to
-exercise the mechanism end-to-end on data Gemma can chew on.
-Production WP2.3 logic lives in ``src/agent_memories/agent/privacy/``.
+One DP synthetic sentence plus the privacy account. Diagnostic only;
+the deployed pipeline is src/agent_memories/generalisation (InvisibleInk).
 """
 
 from __future__ import annotations
 
 import pandas as pd
 
-from agent_memories.agent.privacy import check_delta, generate, rho_for, solve_r
+from agent_memories.agent.amin_et_al import check_delta, generate, rho_for, solve_r
 
 S = 10  # batch size
-C = 50.0  # clip value
+C = 10.0  # clip value
 TAU = 1.0  # tao private
 TAU_PUBLIC = 1.5  # tao public
 SIGMA = 0.5  # noise scale
-THETA = 0.2  # threshold, the higher the less private the text is
+THETA = 0.3  # threshold, the higher the less private the text is
 R_MAX = 80  # maximum number of private tokens
 
-EPSILON = 200.0
+EPSILON = 10.0
 LABEL = "attending a recent event"
 
 

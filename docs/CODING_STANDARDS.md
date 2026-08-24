@@ -185,8 +185,8 @@ git push --force-with-lease origin your-branch-name
 Add `__init__.py` to every folder your code imports from. Leave it empty unless you want a clean public API.
 
 **Add it to:**
-- `src/<package>/` and all sub-folders (`config/`, `services/`, `utils/`)
-- `tests/` and all sub-folders (`unit/`, `unit/config/`, `unit/services/`, `unit/utils/`)
+- `src/<package>/` and all sub-folders (`config/`, `services/`)
+- `tests/` and all sub-folders (`unit/`, `unit/config/`, `unit/services/`, `unit/`)
 - `evaluation/` and any importable sub-folders
 
 **Do not add it to:**
@@ -264,6 +264,7 @@ When work is complete, tested, and squashed into a single commit:
 5. Tick **"Delete source branch when merge request is accepted"**
 6. Tick **"Squash commits when merge request is accepted"** (safety net if not already squashed locally)
 7. Click **Create merge request**, then merge when ready
+
 
 ---
 
@@ -370,3 +371,4 @@ scan). It maps commit content to task numbers and appends dated
 `Progress (YYYY-MM-DD): <sha> "<subject>"` lines to matched tasks.
 It never changes status brackets — it only surfaces evidence for the
 user to act on. Run log: `.claude/thesis/curator.log`.
+---

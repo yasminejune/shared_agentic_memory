@@ -1,4 +1,4 @@
-"""Shared helpers for WebArena batch scripts."""
+"""Shared helpers for the WebArena batch runners."""
 
 from __future__ import annotations
 
@@ -11,14 +11,15 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import httpx
+import numpy as np
 import requests
 
 if TYPE_CHECKING:
-    from agent_memories.memory import MemoryEntry
+    from agent_memories.memory import Embedder, MemoryEntry
 
 from agent_memories.agent.browsergym.env import make_webarena_env
 from agent_memories.agent.state import AgentState
-from agent_memories.config import REPO_ROOT
+from agent_memories.config import DEFAULT_MEMORY_DIR, REPO_ROOT
 from agent_memories.services.ollama_client import DEFAULT_BASE_URL
 
 QWEN_MODEL = "qwen3.5:4b-nvfp4"
@@ -57,6 +58,7 @@ TRAJECTORY_CSV_COLUMNS = [
     "harness_reward",
     "harness_success",
     "run_status",
+    "judge_pending",
 ]
 
 MEMORY_CSV_COLUMNS = [
@@ -73,20 +75,32 @@ MEMORY_CSV_COLUMNS = [
     "run_status",
 ]
 
-# Memory-augmented rerun output: the trajectory columns plus two trailing
-# audit columns, so comparison against trajectories_0.csv works unchanged
-# on the shared prefix.
+# Memory-run CSV: trajectory columns plus retrieved_task_ids and
+# retrieved_memory_titles.
 MEMORY_RUN_CSV_COLUMNS = [
     *TRAJECTORY_CSV_COLUMNS,
     "retrieved_task_ids",
     "retrieved_memory_titles",
 ]
 
-DEFAULT_TRAJECTORIES_CSV = REPO_ROOT / "data" / "webarena" / "trajectories_0.csv"
-DEFAULT_MEMORIES_CSV = REPO_ROOT / "data" / "webarena" / "trajectories_memories.csv"
-DEFAULT_MEMORY_RUN_CSV = REPO_ROOT / "data" / "webarena" / "trajectories_private_memories.csv"
+# source ("private" or "shared"), audit key (task id or DP label), entry
+MemoryRecord = tuple[str, "int | str", "MemoryEntry"]
+
+DEFAULT_TRAJECTORIES_CSV = REPO_ROOT / "data" / "webarena" / "trajectories_A_no_memories.csv"
+DEFAULT_MEMORIES_CSV = (
+    REPO_ROOT / "data" / "webarena" / "trajectories_reasoningbank_private_memories.csv"
+)
+DEFAULT_MEMORY_RUN_CSV = REPO_ROOT / "data" / "webarena" / "trajectories_B_private_run.csv"
+DEFAULT_SHARED_RUN_CSV = REPO_ROOT / "data" / "webarena" / "trajectories_C_shared_only.csv"
+DEFAULT_PRIVATE_SHARED_RUN_CSV = (
+    REPO_ROOT / "data" / "webarena" / "trajectories_D_private_shared.csv"
+)
+DEFAULT_SHARED_STORE = DEFAULT_MEMORY_DIR / "shared.jsonl"
 DEFAULT_INFRA_LOG = REPO_ROOT / "data" / "webarena" / "infra_errors.log"
 DEFAULT_MAX_STEPS = 30
+# Agent Think calls with think=True can run to tens of seconds on a shared
+# A30; a spurious timeout is written as agent_error, not retried as infra.
+THINK_REQUEST_TIMEOUT_SECONDS = 300.0
 
 
 def require_wa_env_vars() -> None:
@@ -220,6 +234,16 @@ def load_memory_built_task_ids(csv_path: Path) -> set[int]:
 def ensure_csv_header(csv_path: Path, columns: list[str]) -> None:
     csv_path.parent.mkdir(parents=True, exist_ok=True)
     if csv_path.exists() and csv_path.stat().st_size > 0:
+        with csv_path.open("r", encoding="utf-8", newline="") as fh:
+            reader = csv.reader(fh)
+            existing = next(reader, None)
+        if existing is not None and existing != columns:
+            raise ValueError(
+                f"Header mismatch in {csv_path}:\n"
+                f"  expected: {columns}\n"
+                f"  found:    {existing}\n"
+                "Pass a fresh --csv-path to start a new file."
+            )
         return
     with csv_path.open("w", encoding="utf-8", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=columns)
@@ -241,7 +265,7 @@ def prepare_webarena(
     infra_log: Path,
 ) -> None:
     """Single WebArena startup path: status/reset, optional smoke task-0, warm-up."""
-    import browsergym.webarena  # noqa: F401 — registers tasks
+    import browsergym.webarena  # noqa: F401  # registers tasks
     from browsergym.experiments.benchmark.utils import massage_tasks
     from browsergym.webarena.instance import WebArenaInstance
 
@@ -293,14 +317,9 @@ def prepare_webarena(
 
 
 def load_memory_entries_from_csv(csv_path: Path) -> list[tuple[int, MemoryEntry]]:
-    """Load ``(task_id, MemoryEntry)`` pairs from the memories CSV.
+    """Load (task_id, MemoryEntry) pairs from the memories CSV.
 
-    Rows without an extracted memory (``memory_extracted != True``) or
-    without a stored embedding are skipped: they carry no retrievable
-    content. The ``memory`` column is already in the
-    :meth:`MemoryEntry.to_dict_without_embedding` schema, so hydration
-    reuses :meth:`MemoryEntry.from_jsonl_dict` with the embedding
-    re-attached from the ``embedding`` column — no embedder call needed.
+    Skips rows with no extracted memory or no stored embedding.
     """
     from agent_memories.memory import MemoryEntry
 
@@ -327,8 +346,100 @@ def load_memory_entries_from_csv(csv_path: Path) -> list[tuple[int, MemoryEntry]
     return pairs
 
 
+def load_private_records(csv_path: Path) -> list[MemoryRecord]:
+    """Private memories from the ReasoningBank CSV, keyed by source task_id."""
+    return [
+        ("private", task_id, entry) for task_id, entry in load_memory_entries_from_csv(csv_path)
+    ]
+
+
+def load_shared_records(store_path: Path, embedder: Embedder) -> list[MemoryRecord]:
+    """Shared memories from the JSONL store, keyed by DP label."""
+    from agent_memories.memory import MemoryStore
+
+    store = MemoryStore.load(store_path, user_id="shared", embedder=embedder)
+    return [("shared", entry.query, entry) for entry in store.all() if entry.embedding is not None]
+
+
+class MemoryIndex:
+    """Cosine top-k over private and/or shared memory records.
+
+    Every condition retrieves the same way; only the record list differs.
+    MemoryStore.search runs the same _cosine_top_k call, so shared entries
+    are indexed here rather than searched through the store.
+    """
+
+    def __init__(self, records: list[MemoryRecord], embedder: Embedder) -> None:
+        self._records = records
+        self._embedder = embedder
+        self._matrix = np.asarray(
+            [entry.embedding for _, _, entry in records],
+            dtype=np.float32,
+        )
+
+    def __len__(self) -> int:
+        return len(self._records)
+
+    def search(self, intent: str, *, k: int) -> list[MemoryRecord]:
+        """Return the top-k records by cosine similarity to intent."""
+        if not self._records or k <= 0:
+            return []
+        from agent_memories.memory.store import _cosine_top_k
+
+        query_vec = np.asarray(self._embedder.embed(intent), dtype=np.float32)
+        indices = _cosine_top_k(query_vec, self._matrix, k)
+        return [self._records[i] for i in indices]
+
+
+def audit_ids(records: list[MemoryRecord]) -> list[int | str]:
+    """Audit keys in rank order: private task ids, shared DP labels."""
+    return [key for _, key, _ in records]
+
+
+def flatten_records_for_think(records: list[MemoryRecord]) -> list[dict[str, str]]:
+    """Flatten records to the {title, content} list Think expects."""
+    flat: list[dict[str, str]] = []
+    for _, _, entry in records:
+        for item in entry.items:
+            flat.append({"title": item.title, "content": item.content})
+    return flat
+
+
+def judge_calls_path(csv_path: Path) -> Path:
+    """Sidecar JSONL path for deferred judge calls, derived from the CSV stem."""
+    return csv_path.with_name(csv_path.stem + "_judge_calls.jsonl")
+
+
+def judge_scores_path(csv_path: Path) -> Path:
+    """Sidecar CSV path for offline judge scores, derived from the CSV stem."""
+    return csv_path.with_name(csv_path.stem + "_judge_scores.csv")
+
+
+def append_judge_calls_record(
+    jsonl_path: Path,
+    *,
+    task_id: int,
+    intent: str,
+    run_status: str,
+    deferred_reward: float,
+    calls: list[dict],
+) -> None:
+    """Append one JSONL record for a task whose judge was deferred."""
+    jsonl_path.parent.mkdir(parents=True, exist_ok=True)
+    record = {
+        "task_id": task_id,
+        "intent": intent,
+        "run_status": run_status,
+        "deferred_reward": deferred_reward,
+        "calls": calls,
+    }
+    with jsonl_path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+        fh.flush()
+
+
 def state_from_trajectory_row(row: dict[str, str]) -> AgentState:
-    """Rebuild minimal :class:`AgentState` from a trajectories CSV row."""
+    """Rebuild AgentState from a trajectories CSV row."""
     from agent_memories.agent.state import new_state
 
     intent = row.get("intent", "")

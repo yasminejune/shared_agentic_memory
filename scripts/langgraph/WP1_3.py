@@ -1,16 +1,8 @@
-"""Runnable entry point for the WP1.3 + WP1.4 Observe-Think-Act loop.
+"""Observe-Think-Act on a live Chromium page.
 
-Drives one TAO session against a real Playwright Chromium page. Think
-is LLM-driven (Qwen via local Ollama by default, Mistral via cloud API
-optionally). The loop terminates on the LLM's ``stop`` action or when
-``--max-steps`` is reached, whichever comes first -- WP1.3 covers the
-single-action grammar, WP1.4 covers the multi-step termination, and
-both ship in this one runner.
-
-Terminal output is intentionally three trace prefixes only:
-``[Observe]:``, ``[Think]:``, ``[Act]:``. The trajectory itself lives
-in ``state['history']`` and is returned from :func:`main` so the
-WP1.5+ memory pipeline can consume it in-process.
+Think is an LLM (local Qwen via Ollama, or Mistral). Stops on the
+model's stop action or --max-steps. Stdout is [Observe]/[Think]/[Act]
+only. main returns the finished state, including history.
 """
 
 from __future__ import annotations
@@ -21,8 +13,10 @@ from dotenv import load_dotenv
 from playwright.sync_api import sync_playwright
 
 from agent_memories.agent import build_graph, new_state
-from agent_memories.agent.nodes import DEFAULT_STUCK_THRESHOLD, make_think
+from agent_memories.agent.constants import DEFAULT_STUCK_THRESHOLD
+from agent_memories.agent.playwright.nodes import make_think
 from agent_memories.agent.state import AgentState
+from agent_memories.config import load_random_seed
 from agent_memories.services.mistral_client import MistralClient
 from agent_memories.services.ollama_client import OllamaClient
 from agent_memories.types import ChatClient
@@ -35,20 +29,18 @@ DEFAULT_AIM = "Find amazon results for paper"
 DEFAULT_MAX_STEPS = 30
 
 
-def _build_client(name: str) -> ChatClient:
+def _build_client(name: str, seed: int) -> ChatClient:
     if name == "qwen":
-        return OllamaClient(model=QWEN_MODEL)
+        return OllamaClient(model=QWEN_MODEL, seed=seed)
     return MistralClient(model=MISTRAL_MODEL)
 
 
 def main(argv: list[str] | None = None) -> AgentState:
-    """Drive one Think-Act-Observe session and return the terminal state.
+    """Run one TAO session and return the terminal AgentState.
 
-    Returns the final ``AgentState`` (the same dict ``graph.invoke``
-    returns) so a higher-level memory-extraction pipeline can read
-    ``result['history']`` directly. The browser is always closed via
-    the ``finally`` block, including when a fatal chat exception
-    propagates.
+    Same dict ``graph.invoke`` returns, so a caller can read
+    ``result['history']`` without scraping stdout. The ``finally``
+    closes the browser even if the chat client blows up.
     """
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--model", choices=("qwen", "mistral"), default="qwen")
@@ -68,7 +60,7 @@ def main(argv: list[str] | None = None) -> AgentState:
     args = parser.parse_args(argv)
 
     load_dotenv()
-    client = _build_client(args.model)
+    client = _build_client(args.model, load_random_seed())
     state = new_state(aim=args.aim)
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=args.headless)

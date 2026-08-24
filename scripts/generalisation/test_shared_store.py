@@ -1,25 +1,12 @@
-"""Standalone round-trip for the WP2 shared :class:`MemoryStore`.
+"""Round-trip the shared MemoryStore (outcome='shared').
 
-Phase 1.4 exerciser for the additive change in
-:mod:`agent_memories.memory.store` that extends the ``Outcome``
-literal to include ``"shared"`` (WP2-plan §7.1 / §8.1). The shared
-store is the same :class:`MemoryStore` class as the per-user one,
-pointed at ``data/memories/shared.jsonl`` with the reserved
-``user_id="shared"`` and ``query=<round-1 label string>`` (so cosine
-retrieval matches a new agent query against the label, see
-WP2-plan §7.1).
+Writes one entry to a temp JSONL, reloads it through a second store
+instance (so _coerce_outcome actually runs on disk), then
+search(label, k=1) to check cosine retrieval over the label
+embedding. Same MemoryStore class as the per-user stores; user_id
+is the reserved "shared" and query is the round-1 label string.
 
-This script writes one entry through ``add_entry`` (which embeds the
-label via the same :class:`Embedder` the per-user stores use), then
-constructs a *second* store instance against the same path so the
-reload path goes through ``_load_from_disk`` and exercises
-:func:`_coerce_outcome` on the persisted ``"shared"`` outcome. It
-then runs ``store.search(query=label, k=1)`` to confirm cosine
-retrieval over the label embedding finds the round-tripped entry.
-
-The test JSONL is removed at the end so repeated runs stay
-deterministic; pass ``--keep`` to leave it in place for manual
-inspection.
+Deletes the temp file afterwards unless --keep.
 """
 
 from __future__ import annotations
