@@ -1,4 +1,4 @@
-"""Title and description for a shared memory, from its DP-released content.
+"""Title and description for a shared memory.
 
 A normal Qwen call. The content is already private, so this step does not
 spend more budget. Title is 1-10 words with no trailing punctuation.

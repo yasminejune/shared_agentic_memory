@@ -2,8 +2,7 @@
 
 The thesis deploys this mechanism for Step 1 labels and Step 3
 shared-memory content. Shares Gemma plumbing and prompt templates with
-agent/lm/. Guarantee is example-level (one MemoryEntry), not
-user-level.
+agent/lm/.
 """
 
 from __future__ import annotations

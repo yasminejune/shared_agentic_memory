@@ -1,8 +1,7 @@
 """Shared paths, artefacts, and CSV loading for the four pipeline steps.
 
 The memories CSV contract matches scripts/webarena/common (extracted
-rows only, embedding re-attached). The loader lives here because that
-module pulls in BrowserGym at import time.
+rows only, embedding re-attached)
 """
 
 from __future__ import annotations
@@ -66,9 +65,8 @@ def render_item_block(entry: MemoryEntry) -> str:
 def load_memory_entries_from_csv(csv_path: Path) -> list[tuple[int, MemoryEntry]]:
     """Load (task_id, MemoryEntry) pairs from the memories CSV.
 
-    Rows without an extracted memory (memory_extracted != True) or
-    without a stored embedding are skipped. Same contract as
-    scripts/webarena/common.load_memory_entries_from_csv.
+    Rows without an extracted memory or
+    without a stored embedding are skipped.
     """
     if not csv_path.exists():
         raise FileNotFoundError(f"Memories file not found: {csv_path}")

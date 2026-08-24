@@ -1,10 +1,11 @@
 """zCDP accounting for Amin et al. (2024) Algorithm 1 (Theorem 1).
 
-Closed form, used by epsilon_from_rho and solve_r:
+There are two forms of the privacy bound:
+* Closed form, used by epsilon_from_rho and solve_r:
 
     epsilon(rho, delta) = rho + sqrt(4 * rho * log(1 / delta))
 
-Tight form, used by delta_from_rho_epsilon and check_delta:
+* Tight form, used by delta_from_rho_epsilon and check_delta:
 
     delta(rho, epsilon) = inf_{alpha > 1}
         exp((alpha - 1) * (alpha * rho - epsilon)) / (alpha - 1)
@@ -76,11 +77,11 @@ def solve_r(
     sigma: float,
     r_max: int | None = 80,
 ) -> int:
-    """Largest integer ``r`` with Theorem 1 epsilon at most ``target_epsilon``.
+    """Largest integer r with Theorem 1 epsilon at most target_epsilon.
 
-    ``r_max`` caps the search (default 80). Pass ``r_max=None`` to stop
-    only when the next ``r`` would exceed the budget. Returns 0 when
-    even ``r = 1`` is too large.
+    r_max caps the search (default 80). Pass r_max=None to stop
+    only when the next r would exceed the budget. Returns 0 when
+    even r = 1 is too large.
     """
     best_r = 0
     r = 1
@@ -106,7 +107,7 @@ def solve_r(
 def _log_amin_delta(alpha: float, rho: float, epsilon: float) -> float:
     """Log of the per-alpha summand in Amin Theorem 1's tight delta.
 
-    ``f(alpha) = exp((alpha-1)(alpha*rho - epsilon)) / (alpha-1)
+    f(alpha) = exp((alpha-1)(alpha*rho - epsilon)) / (alpha-1)
                  * (1 - 1/alpha) ** alpha``
 
     Log space keeps the minimisation stable when the exponent is large.
@@ -121,9 +122,8 @@ def _log_amin_delta(alpha: float, rho: float, epsilon: float) -> float:
 def delta_from_rho_epsilon(rho: float, epsilon: float) -> float:
     """Tight delta from Amin Theorem 1 first statement.
 
-    Smallest ``delta`` for which Algorithm 1 is ``(epsilon, delta)``-DP
-    at this ``rho``. Golden-section search over ``alpha > 1`` on the
-    log-objective, which is unimodal on ``(1, infinity)``.
+    Smallest delta for which Algorithm 1 is (epsilon, delta)-DP
+    at this rho. 
     """
     if rho <= 0.0:
         return 0.0
@@ -145,10 +145,6 @@ def delta_from_rho_epsilon(rho: float, epsilon: float) -> float:
 @dataclass(frozen=True)
 class DeltaCheck:
     """Diagnostic result for check_delta.
-
-    Each bool is one independent condition on ``delta``; ``valid`` is
-    the conjunction. ``delta_min`` is the Theorem 1 tight bound;
-    ``delta_max_convention`` is Appendix C's ``1 / n``.
     """
 
     delta_chosen: float
@@ -163,15 +159,19 @@ class DeltaCheck:
 
     @property
     def valid(self) -> bool:
+        # Checks considitions of delta: 
+        # valid is the conjunction. 
+        # delta_min is the Theorem 1 tight bound;
+        # delta_max_convention is Appendix C's 1 / n
         return self.delta_in_domain and self.delta_meets_theorem1 and self.delta_within_n_bound
 
 
 def check_delta(rho: float, epsilon: float, delta: float, n: int) -> DeltaCheck:
     """Validate ``delta`` against Amin Theorem 1 and Appendix C.
 
-    Three independent conditions: ``delta in (0, 1]`` (Theorem 1
-    domain); ``delta >= delta_from_rho_epsilon(rho, epsilon)`` (tight
-    bound); ``delta <= 1 / n`` (Appendix C convention). Returns a
+    Three independent conditions: delta in (0, 1] (Theorem 1
+    domain); delta >= delta_from_rho_epsilon(rho, epsilon) (tight
+    bound); delta <= 1 / n (Appendix C convention). Returns a
     DeltaCheck; the caller decides whether to abort, warn, or proceed.
     """
     if n <= 0:
@@ -193,6 +193,7 @@ def check_delta(rho: float, epsilon: float, delta: float, n: int) -> DeltaCheck:
 
 
 if __name__ == "__main__":
+    # Example script for testing the accounting functions
     s, c, tau, sigma = 10, 10.0, 1.5, 1.0
     delta = 1.0 / s
     n = 10

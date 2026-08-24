@@ -1,9 +1,8 @@
 """Step 3: InvisibleInk content generation for qualifying label buckets.
 
-Generates the content field only. Markdown title headers would spend
-privacy budget, so they are not produced here. Accounting b is the gate
+Generates the content field only. Accounting b is the gate
 threshold (default 7). Large buckets are split into several InvisibleInk
-runs: while at least 2b members remain, a prefix of b is peeled off;
+runs: while at least 2b members remain, a b memories are peeled off;
 the last run takes the rest (size b ... 2b-1). Writes one contents.jsonl
 row per chunk.
 """

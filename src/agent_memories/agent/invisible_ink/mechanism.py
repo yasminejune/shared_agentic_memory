@@ -1,8 +1,4 @@
 """DClip and Top-k+ primitives for InvisibleInk Algorithm 1.
-
-Torch wrappers around invink ``difference_clip`` and ``get_topk``.
-``get_topk`` takes paper ``B`` (threshold ``ell - 2C/B``), not the
-``B+1`` that ``invink.generate`` passes.
 """
 
 from __future__ import annotations
@@ -13,13 +9,11 @@ from invink.utils import difference_clip, get_topk
 
 
 def dclip_mean(Z: torch.Tensor, z_public: torch.Tensor, c: float) -> torch.Tensor:  # noqa: N803
-    """Mean of DClip rows: ``phi_pub + mean_i clip_C(phi_i - phi_pub)``.
+    """Mean of DClip rows: phi_pub + mean_i clip_C(phi_i - phi_pub).
 
-    Casts inputs to ``float32`` before ``difference_clip`` so NumPy
-    cannot promote the authors' three full-size temporaries to
-    ``float64`` (at ``B=100`` and Gemma 2's 256k vocabulary that would
-    be ~600 MB of transient host memory per token). Returns a
-    ``float32`` CPU tensor of shape ``(vocab,)``.
+    Changes inputs to a float32 before the clipping since NumPy
+    cannot promote the three full-size temporaries to
+    float64. Returns a float32 CPU tensor of shape (vocab,).
     """
     z32 = Z.detach().to(dtype=torch.float32)
     pub32 = z_public.detach().to(dtype=torch.float32)
@@ -37,11 +31,12 @@ def top_k_plus_mask(
 ) -> tuple[torch.Tensor, np.ndarray]:
     """Boolean Top-k+ mask and expansion-band indices from public logits.
 
-    When ``k`` covers the full vocabulary the mask is all-ones and the
-    expansion index array is empty. Otherwise calls ``get_topk`` with
-    paper ``b``. Returns ``(mask, expansion_idxs)``; ``expansion_idxs``
+    When k covers the full vocabulary the mask is all-ones and the
+    expansion index array is empty. 
+    Otherwise calls get_topk in line with the paper.
+    Returns (mask, expansion_idxs), where expansion_idxs
     are the indices between the top-k threshold and the expanded
-    threshold, used for the ``expansion_set_count`` metric.
+    threshold, used for the expansion_set_count metric.
     """
     pub_np = z_public.detach().to(dtype=torch.float32).cpu().numpy()
     if k >= pub_np.size:
@@ -53,10 +48,6 @@ def top_k_plus_mask(
 
 def sample_topk_plus(phi_bar: torch.Tensor, mask: torch.Tensor, tau: float) -> int:
     """Softmax-sample one token from the Top-k+ support only.
-
-    Stays in torch to avoid rebuilding ``np.arange(vocab)`` per token
-    the way ``invink.generate`` does. ``mask`` must be a boolean tensor
-    of the same shape as ``phi_bar``.
     """
     masked = phi_bar.masked_fill(~mask, float("-inf"))
     probs = torch.softmax(masked / tau, dim=-1)

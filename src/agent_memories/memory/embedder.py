@@ -1,7 +1,6 @@
 """Sentence-transformers wrapper. Default model is all-MiniLM-L6-v2.
 
-The rest of the codebase never imports the library directly. The model
-loads in __init__ so the cost is paid at construction, not mid-turn.
+The rest of the codebase never imports the library directly. 
 """
 
 from __future__ import annotations

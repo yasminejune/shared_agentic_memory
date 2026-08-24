@@ -1,8 +1,7 @@
 """Step 2: assign each private entry to one DP label by cosine similarity.
 
-Assignment is cosine of embeddings (label vs query). Per Amin Assumption 1
-it depends only on the entry itself. A label proceeds to Step 3 once
-enough entries sit in it. Writes assignments.json and the carry-over
+Assignment is based on cosine similarity of labels and tasks. 
+A label proceeds to Step 3 once enough entries sit in it. Writes assignments.json and the carry-over
 buffer.
 """
 

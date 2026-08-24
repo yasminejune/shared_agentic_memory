@@ -1,9 +1,6 @@
 """Nearest label by cosine of label vs query embeddings.
 
-Each private entry is assigned to one label. Per Amin Assumption 1 the
-assignment depends only on the entry itself (its query embedding) and
-the public labels, never on other memories in the batch. Gating (does
-this label have enough entries for Step 3) is the caller's job.
+Each private entry is assigned to one label.
 """
 
 from __future__ import annotations
@@ -37,7 +34,7 @@ def assign_memories_to_labels(
     """Assign each entry to its nearest label by cosine similarity.
 
     Labels are embedded in one batch. Each memory uses its stored query
-    embedding. Entries with no embedding raise ValueError.
+    embedding. Entries with no embedding raise a ValueError.
     """
     if not labels:
         raise ValueError("`labels` must contain at least one label.")

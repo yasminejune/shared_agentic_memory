@@ -3,11 +3,6 @@
 Clips and averages private logits, compares them to a public prompt via a
 noisy L1 test, then samples either a private token (exponential mechanism)
 or a free public token. Returns the decoded string and a PrivacyAccount.
-
-Earlier private-prediction path; the deployed mechanism is InvisibleInk
-in agent/invisible_ink. Templates and the Gemma wrapper are shared.
-Averaging uses expected batch size s. The public prompt is the same
-wrap_fn with "(no examples)".
 """
 
 from __future__ import annotations
@@ -26,8 +21,8 @@ from .accounting import PrivacyAccount, epsilon_from_rho, rho_for, solve_r
 def clip_recenter(Z: torch.Tensor, c: float) -> torch.Tensor:  # noqa: N803
     """Amin et al. Equation 1: ``clip_c(z)_i = max(-c, z_i - max_j(z_j) + c)``.
 
-    Shifts the row max to ``c`` then clamps below at ``-c``, so each
-    component lies in ``[-c, c]``. ``Z`` has shape ``(batch, vocab)``.
+    Shifts the row max to c then clamps below at -c, so each
+    component lies in [-c, c]. Z has shape (batch, vocab).
     """
     max_per_row = Z.max(dim=-1, keepdim=True).values
     shifted = Z - max_per_row + c
@@ -37,11 +32,11 @@ def clip_recenter(Z: torch.Tensor, c: float) -> torch.Tensor:  # noqa: N803
 def softmax_l1_distance(Z: torch.Tensor, z_public: torch.Tensor, s: int) -> float:  # noqa: N803
     """Amin et al. Equation 2: softmax L1 distance.
 
-    ``d(Z, z_public) = || (1/s) * sum_{z in Z} softmax(z)
-                          - softmax(z_public) ||_1``
+    d(Z, z_public) = || (1/s) * sum_{z in Z} softmax(z)
+                          - softmax(z_public) ||
 
-    The divisor is the expected batch size ``s``, not the actual row
-    count of ``Z``. That is the quantity the privacy proof bounds.
+    The divisor is the expected batch size s, not the actual row
+    count of Z. That is the quantity the privacy proof bounds.
     """
     p_batch = torch.softmax(Z, dim=-1)
     p_public = torch.softmax(z_public, dim=-1)
@@ -52,8 +47,8 @@ def softmax_l1_distance(Z: torch.Tensor, z_public: torch.Tensor, s: int) -> floa
 def sample_private(Z: torch.Tensor, c: float, tau: float, s: int) -> int:  # noqa: N803
     """Exponential-mechanism sample from the clipped batch average.
 
-    Draws one token from ``softmax((1/s) * sum clip_c(z) / tau)``.
-    ``s`` is the expected batch size, not the row count of ``Z``.
+    Draws one token from softmax((1/s) * sum clip_c(z) / tau).
+    s is the expected batch size, not the row count of Z.
     """
     Z_clipped = clip_recenter(Z, c)  # noqa: N806
     z_bar = Z_clipped.sum(dim=0) / s
@@ -89,12 +84,10 @@ def generate(
 ) -> tuple[str, PrivacyAccount]:
     """Run Amin et al. Algorithm 1 on one batch.
 
-    ``texts`` are pre-rendered items blocks; ``wrap_fn`` (default
-    ``prompts.wrap``) fills the template. The public prompt is
-    ``wrap_fn`` with no ``items``, so the slot is ``"(no examples)"``
-    and only content tokens spend budget. Pass exactly one of ``r``
-    (fixed private-token budget) or ``target_epsilon`` (largest ``r``
-    whose Theorem 1 epsilon fits). ``delta`` defaults to ``1 / s``.
+    The texts are pre-rendered items blocks.
+    Wrap_fn fills the template with the text. 
+    The public prompt is wrap_fn with no items, so the slot is "(no examples)"
+    delta defaults to 1 / s.
     Returns the decoded string and a PrivacyAccount.
     """
     if delta is None:

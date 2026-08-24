@@ -46,9 +46,9 @@ class MemoryItem:
 
 @dataclass
 class MemoryEntry:
-    """One trajectory's memories: query, outcome, and up to three items.
+    """One trajectory's memories: task, outcome, and up to three items.
 
-    The embedding is over query. All items share one outcome from the
+    The embedding is over tasks, aka queries. All items share one outcome from the
     judge.
     """
 
@@ -95,11 +95,11 @@ def _coerce_outcome(raw: Any) -> Outcome:
     Unrecognised values become failed. shared is kept so the
     cross-user store round-trips through load.
     """
-    if raw == "successful":
+    if raw == "successful": # I.e. successful private memories
         return "successful"
-    if raw == "shared":
+    if raw == "shared": # I.e. shared memories (non-private)
         return "shared"
-    return "failed"
+    return "failed" # I.e. failed private memories
 
 
 def _utcnow_iso() -> str:

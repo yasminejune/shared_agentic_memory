@@ -2,24 +2,23 @@
 
 Token-by-token DP generation for Step 1 labels and Step 3 shared-memory
 content. Shares Gemma plumbing and prompt templates with agent/lm/.
-Does not call ``invink.generate``: that path loads its own model and
-emits ``num`` sequences from disjoint partitions, which does not fit
-one JSON array of ``k`` labels from one batch of ``B`` references.
+Does not call invink.generate from the public repo since that path loads its own model and
+emits num sequences from disjoint partitions, which does not fit
+one JSON array of k labels from one batch of B references.
 
 Per-token steps (paper Algorithm 1):
 
-1. Prefill ``B`` sensitive prompts plus one public prompt.
+1. Prefill B sensitive prompts plus one public prompt.
 2. Build Top-k+ vocabulary from public logits only:
-   ``{y : phi_pub(y) >= ell - 2C/B}``.
+   {y : phi_pub(y) >= ell - 2C/B}.
 3. DClip-aggregate private logits:
-   ``phi_bar = phi_pub + (1/B) sum clip_C(phi_i - phi_pub)``.
-4. Sample from ``softmax(phi_bar[V_k+] / tau)``; every token spends
+   phi_bar = phi_pub + (1/B) sum clip_C(phi_i - phi_pub).
+4. Sample from softmax(phi_bar[V_k+] / tau); every token spends
    budget (no Amin SVT public path).
 
-Clip ``C`` is calibrated from target ``(epsilon, delta)`` via Theorem 2:
-``C = B * tau * sqrt(2 * rho / T)`` with ``rho`` inverted from
-``epsilon`` at fixed ``delta``. The guarantee is example-level (one
-MemoryEntry), not user-level.
+C is calibrated from target (epsilon, delta)-DP via Theorem 2:
+C = B * tau * sqrt(2 * rho / T) with rho inverted from
+epsilon at fixed delta.
 """
 
 from __future__ import annotations
@@ -48,6 +47,7 @@ def _validate_generate_args(
     top_k: int,
     max_total_tokens: int,
 ) -> None:
+    # Ensure valid arguments for b, top_k, and max_total_tokens
     if b < 1:
         raise ValueError(f"b (private references) must be >= 1, got {b}.")
     if len(texts) < b:
@@ -93,7 +93,8 @@ def _sample_one_token(
     tau: float,
     top_k: int,
 ) -> tuple[int, int, bool]:
-    """DClip + Top-k+ sample; return ``(token_id, |V_k+|, expansion_hit)``."""
+    """DClip + Top-k+ sample; return the token_id, the size of the expanded vocabulary |V_k+|, 
+    and whether the token was in the expansion set (expansion_hit)."""
     mask, expansion_idxs = top_k_plus_mask(z_pub, k=top_k, c=c, b=b)
     phi_bar = dclip_mean(z_private, z_pub, c)
     tok = sample_topk_plus(phi_bar, mask, tau)
@@ -141,7 +142,7 @@ def _next_logits_microbatched(
     x_ids: list[int],
     chunk_size: int,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """Private-batch logits in chunks of ``chunk_size``, plus one public row."""
+    """Private-batch logits in chunks of chunk_size, plus one public row."""
     rows: list[torch.Tensor] = []
     for start in range(0, len(prompt_ids), chunk_size):
         chunk = [ids + x_ids for ids in prompt_ids[start : start + chunk_size]]
@@ -165,25 +166,17 @@ def generate(
 ) -> tuple[str, InvisibleInkAccount]:
     """Run InvisibleInk Algorithm 1 on one batch; return text + account.
 
-    ``texts`` are pre-rendered memory-items blocks, one per batch
-    member. ``wrap_fn`` defaults to the round-2 ``wrap``; the round-1
-    caller passes ``wrap_fn=wrap_label`` with ``k=...``. The public
-    prompt is ``wrap_fn(**wrap_kwargs)`` with no ``items``, so the
-    items block defaults to ``"(no examples)"``. ``phi_pub`` is
+    The texts are pre-rendered memory-items blocks, one per batch
+    member. Wrap_fn defaults to the Step 3 wrap, whereas the Step 1
+    caller passes wrap_fn=wrap_label. The public
+    prompt is wrap_fn(**wrap_kwargs) with no items, so the
+    items block defaults to "(no examples)". phi_pub is
     subtracted from every private logit and defines the sampling
-    support, so that alignment matters.
+    support.
 
-    ``b`` is the accounting private-reference count used to calibrate
-    clip ``C`` and the Theorem 2 spend. It must satisfy
-    ``len(texts) >= b``. When they are equal, this is the paper's
-    ``B = |R|``. When ``len(texts) > b``, DClip still averages over
-    the actual rows (sensitivity ``1/n``) while clip / epsilon use
-    the smaller ``b``: an upper-bound account for a qualifying bucket
-    that is larger than the gate threshold.
-
-    Uses a single padded KV-cache prefill over ``B + 1`` rows. On
+    Uses a single padded KV-cache prefill over B + 1 rows. On
     long inputs that path can OOM on MPS; callers that need a
-    memory-capped twin should use ``generate_microbatched``.
+    memory-capped twin should use generate_microbatched.
     """
     c, stop, prompt_ids, public_ids = _prepare(
         texts,
@@ -246,13 +239,12 @@ def generate_microbatched(
     wrap_fn: Callable[..., str] = wrap,
     **wrap_kwargs: Any,
 ) -> tuple[str, InvisibleInkAccount]:
-    """Same Algorithm 1 as ``generate``, without a full-batch prefill.
+    """Same Algorithm 1 as generate, without a full-batch prefill.
 
-    Each token step gathers private logits in chunks of ``chunk_size``
-    via ``get_next_token_logits_from_ids`` and runs the public branch
+    Each token step gathers private logits in chunks of chunk_size
+    via get_next_token_logits_from_ids and runs the public branch
     as a single-row forward. Re-tokenises the running suffix each step
-    (no KV-cache reuse) so peak memory stays ``O(chunk_size * seq_len)``
-    rather than ``O(B * seq_len)``.
+    (no KV-cache reuse) to minimise memory usage.
     """
     if chunk_size < 1:
         raise ValueError(f"chunk_size must be >= 1, got {chunk_size}.")
@@ -298,7 +290,7 @@ def generate_microbatched(
 
 
 def _is_oom_error(exc: BaseException) -> bool:
-    """True when ``exc`` looks like GPU / MPS memory exhaustion."""
+    """True when exc looks like GPU / MPS memory exhaustion."""
     msg = str(exc).lower()
     return any(needle in msg for needle in ("out of memory", "buffer size", "oom", "mps backend"))
 
@@ -309,10 +301,10 @@ def generate_with_oom_fallback(
     chunk_size: int = 8,
     **kwargs: Any,
 ) -> tuple[str, InvisibleInkAccount, str]:
-    """Run ``generate``, falling back to ``generate_microbatched`` on OOM.
+    """Run generate, falling back to generate_microbatched on OOM.
 
-    Returns ``(decoded_text, account, engine)`` where ``engine`` is
-    ``"production"`` or ``"microbatched"``. ``kwargs`` are forwarded to
+    Returns (decoded_text, account, engine) where the engine is either
+    "production" or "microbatched". The kwargs are forwarded to
     both call sites.
     """
     print("  invisible_ink: trying production generate (KV-cache path)...", flush=True)

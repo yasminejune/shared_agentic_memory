@@ -1,6 +1,6 @@
 """Build a ReasoningBank memory from a finished run.
 
-Judge the trajectory (success/failure), then extract up to three
+Judge the trajectory a success or failure, then extract up to three
 title/description/content items. Nothing is written if extraction is empty.
 """
 

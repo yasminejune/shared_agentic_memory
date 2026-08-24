@@ -47,9 +47,8 @@ def select_round2_inputs(
     """Apply the size gate to every per-label bucket.
 
     buckets[k] is the list of batch indices assigned to label k.
-    x_per_label must be a positive integer.
     """
-    if x_per_label < 1:
+    if x_per_label < 1: # x_per_label has to be positive
         raise ValueError(f"x_per_label must be >= 1; got {x_per_label}.")
 
     label_inputs: list[list[int] | None] = []
@@ -64,10 +63,10 @@ def select_round2_inputs(
 
 
 def write_buffer(entries: list[MemoryEntry], path: Path) -> None:
-    """Persist the carry-over buffer as JSONL at path (overwrite).
+    """Persist the carry-over buffer as a JSONL.
 
     Each line is a versioned MemoryEntry record. Overwriting is
-    intentional: the buffer is what remains for the next run, so that
+    intentional since the buffer is what remains for the next run, so that
     run should not see stale carry-over from an earlier invocation.
     """
     path.parent.mkdir(parents=True, exist_ok=True)

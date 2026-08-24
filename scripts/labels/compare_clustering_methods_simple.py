@@ -94,7 +94,7 @@ ALL_METHODS: tuple[str, ...] = (
 )
 
 EXAMPLES_PATH = Path("scripts/amin_et_al/examples.csv")
-OUTPUTS_PATH = Path("scripts/amin_et_al/outputs/cluster_comparison.jsonl")
+OUTPUTS_PATH = Path("scripts/labels/outputs/cluster_comparison.jsonl")
 
 MODEL_NAME = "google/gemma-2-2b-it"
 

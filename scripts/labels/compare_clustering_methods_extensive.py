@@ -112,7 +112,7 @@ ALL_METHODS: tuple[str, ...] = (
 )
 
 EXAMPLES_PATH = Path("scripts/amin_et_al/examples.csv")
-OUTPUTS_PATH = Path("scripts/amin_et_al/outputs/cluster_comparison_extensive.jsonl")
+OUTPUTS_PATH = Path("scripts/labels/outputs/cluster_comparison_extensive.jsonl")
 TOY_REPEAT = 10
 
 MODEL_NAME = "google/gemma-2-2b-it"

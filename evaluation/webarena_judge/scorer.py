@@ -1,6 +1,6 @@
 """Score deferred WebArena LLM-judge calls with Mistral.
 
-The live harness reward is the official score. A subset of tasks also
+The live harness reward is the official score. But a subset of tasks also
 need fuzzy_match or ua_match; those were recorded during the run and
 are scored here. The harness match functions keep their original prompts
 but talk to a pinned Mistral model instead of gpt-4-1106-preview.
@@ -109,7 +109,7 @@ def score_task(
 ) -> tuple[list[float], float, float, bool, str]:
     """Score every deferred judge call for one task.
 
-    sleep_between is the gap after every API attempt. A 429 waits at least
+    sleep_between is the gap after every API attempt due to the rate limit of Mistral. A 429 waits at least
     RATE_LIMIT_RETRY_SLEEP seconds so retries do not burn the minute window.
     """
     verdicts: list[float] = []

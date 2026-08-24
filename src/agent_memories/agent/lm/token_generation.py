@@ -43,9 +43,8 @@ def _load() -> None:
 def set_model(name: str) -> None:
     """Bind a HuggingFace model id and clear the cached tokeniser and weights.
 
-    The next call into this module loads ``name``. Default is
-    ``google/gemma-2-2b-it``; pass ``google/gemma-2-2b`` for the
-    raw-completion ablation.
+    The name is the model name. Default is
+    ``google/gemma-2-2b-it``
     """
     global MODEL_NAME, _tokenizer, _model
     MODEL_NAME = name
@@ -54,8 +53,8 @@ def set_model(name: str) -> None:
 
 
 def encode(text: str) -> list[int]:
-    """Tokenise ``text`` into a flat list of token ids."""
-    _load()
+    """Tokenise the text into a flat list of token ids."""
+    _load() # Loads the gemma model and tokenizer
     ids: list[int] = _tokenizer(text, return_tensors=None, add_special_tokens=True)["input_ids"]
     return ids
 
@@ -65,7 +64,7 @@ def encode_chat(prompt: str) -> list[int]:
 
     Applies Gemma's ``<start_of_turn>user ... <end_of_turn><start_of_turn>model``
     wrapper with ``add_generation_prompt=True`` so the next token continues
-    the assistant reply. Instruction-tuned models use this; raw-completion
+    the assistant reply. Only instruction-tuned models use this, whereas raw-completion
     models should use encode() instead.
     """
     _load()
@@ -94,15 +93,14 @@ def eos_id() -> int:
 def stop_ids() -> set[int]:
     """Token ids that should terminate generation.
 
-    Always includes eos. For instruction-tuned Gemma (id ending in
-    ``-it``) also includes ``<end_of_turn>``. The base model is not
-    trained to emit that marker, so it is omitted there.
+    Includes eos, and for the instruction-tuned Gemma, it also includes 
+    ``<end_of_turn>``.
     """
     _load()
     ids: set[int] = set()
     if _tokenizer.eos_token_id is not None:
         ids.add(int(_tokenizer.eos_token_id))
-    if MODEL_NAME.split("/")[-1].endswith("-it"):
+    if MODEL_NAME.split("/")[-1].endswith("-it"): # I.e. is the Gemma IT model
         end_of_turn = _tokenizer.convert_tokens_to_ids("<end_of_turn>")
         if isinstance(end_of_turn, int) and end_of_turn != _tokenizer.unk_token_id:
             ids.add(end_of_turn)
@@ -110,11 +108,8 @@ def stop_ids() -> set[int]:
 
 
 def get_next_token_logits(prompts: list[str]) -> torch.Tensor:
-    """Stacked next-token logits, one row per prompt (shape ``(n, vocab)``).
-
-    Matches Amin et al. Algorithm 1 line 9: run the model on each prompt
-    in the batch. The public prompt is the same call with a one-element
-    list.
+    """Get the stacked next-token logits from a raw text.
+    Each row is for a new prompt/memory, thus the shape is (n, vocab size).
     """
     _load()
     rows: list[torch.Tensor] = []
@@ -128,9 +123,9 @@ def get_next_token_logits(prompts: list[str]) -> torch.Tensor:
 
 
 def _pad_left(prompt_ids: list[list[int]], pad_id: int) -> tuple[torch.Tensor, torch.Tensor]:
-    """Left-pad id lists to ``(B, T)`` so the last column is each row's last real token.
+    """Left-pad id lists to size (B, T) so the last column is each row's last real token.
 
-    Next-token logits are then ``logits[:, -1, :]``. Pads are ignored via
+    Next-token logits are then logits[:, -1, :]. Pads are ignored via
     the attention mask (1 = real, 0 = pad).
     """
     max_len = max(len(ids) for ids in prompt_ids)
@@ -145,9 +140,8 @@ def _pad_left(prompt_ids: list[list[int]], pad_id: int) -> tuple[torch.Tensor, t
 
 
 def get_next_token_logits_from_ids(prompt_ids: list[list[int]]) -> torch.Tensor:
-    """Stacked next-token logits from pre-tokenised id lists.
+    """Stacked next-token logits from a list of already tokenised ids.
 
-    Same shape as get_next_token_logits: ``(len(prompt_ids), vocab_size)``.
     Left-pads and runs one batched forward. Logits are returned as
     float32.
     """
@@ -170,8 +164,6 @@ def get_next_token_logits_from_ids(prompt_ids: list[list[int]]) -> torch.Tensor:
 @dataclass
 class PrefillState:
     """KV-cache and running attention mask from prefill_padded.
-
-    Opaque: the only valid use is to pass it back into continue_batched.
     """
 
     past_key_values: Any
@@ -183,9 +175,9 @@ def prefill_padded(
 ) -> tuple[torch.Tensor, PrefillState]:
     """Batched prefill: last-position logits and a KV-cache PrefillState.
 
-    Left-pads ``prompt_ids`` and runs one forward with ``use_cache=True``.
+    Left-pads the prompt_ids and runs one forward pass.
     Thread the state into continue_batched so later tokens do not
-    re-attend the prefix. ``logits_to_keep=1`` so only the last
+    re-attend the prefix. The logits_to_keep=1 means only the last
     position is materialised.
     """
     _load()
@@ -212,9 +204,6 @@ def continue_batched(
     new_token_ids: list[int],
 ) -> tuple[torch.Tensor, PrefillState]:
     """One-token continuation from cached K/V; return new logits and state.
-
-    ``new_token_ids[i]`` is the token for row ``i``. The model sees
-    ``(B, 1)`` new ids; earlier positions come from the KV cache.
     """
     _load()
     batch_size = len(new_token_ids)
@@ -241,5 +230,5 @@ def continue_batched(
 
 
 def softmax(logits: torch.Tensor) -> torch.Tensor:
-    """Numerically stable softmax over the last dimension."""
+    """Softmax over vocabulary size"""
     return torch.softmax(logits, dim=-1)

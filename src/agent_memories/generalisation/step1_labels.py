@@ -46,7 +46,7 @@ def run_label_generation(
     chunk_size: int = GEMMA_CHUNK_SIZE,
     generate_fn: GenerateFn = generate_with_oom_fallback,
 ) -> dict[str, Any]:
-    """Synthesise k labels from task queries; return the labels artefact."""
+    """Get k labels from ReasoningBank memories, which include the task text"""
     if not entries:
         raise ValueError("Step 1 requires at least one extracted task.")
     texts = [entry.query for entry in entries]
