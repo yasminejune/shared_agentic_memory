@@ -1,0 +1,5 @@
+condition,n_success,success_rate,n_ok,n_agent_error,n_missing,judge_pending,judge_scored,judge_status,n_unknown
+A,117,14.4%,812,0,0,118,118,complete,0
+B,126,15.5%,812,0,0,118,118,complete,0
+C,125,15.4%,812,0,0,114,114,complete,0
+D,122,15.0%,812,0,0,114,114,complete,0

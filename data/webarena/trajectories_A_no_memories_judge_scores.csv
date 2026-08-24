@@ -1,0 +1,277 @@
+task_id,judge_model,n_calls,verdicts,judge_product,deferred_reward,final_reward,final_success,status,scored_at
+8,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T09:52:02+00:00
+16,mistral-large-2512,2,"[0.0, 0.0]",0.0,1.0,0.0,False,scored,2026-08-15T09:52:06+00:00
+17,mistral-large-2512,2,"[0.0, 0.0]",0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T09:52:16+00:00
+18,mistral-large-2512,2,"[0.0, 0.0]",0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T09:52:32+00:00
+19,mistral-large-2512,2,"[0.0, 0.0]",0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T09:52:48+00:00
+20,mistral-large-2512,2,"[0.0, 0.0]",0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T09:53:02+00:00
+22,mistral-large-2512,1,[1.0],1.0,1.0,1.0,True,scored,2026-08-15T09:53:02+00:00
+24,mistral-large-2512,1,[1.0],1.0,1.0,1.0,True,scored,2026-08-15T09:53:03+00:00
+34,mistral-large-2512,1,[0.0],0.0,0.0,0.0,False,scored,2026-08-15T09:53:07+00:00
+35,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T09:53:16+00:00
+47,mistral-large-2512,2,"[0.0, 0.0]",0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T09:53:33+00:00
+48,mistral-large-2512,2,"[0.0, 0.0]",0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T09:53:49+00:00
+49,mistral-large-2512,2,"[0.0, 0.0]",0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T09:54:03+00:00
+50,mistral-large-2512,2,"[0.0, 0.0]",0.0,1.0,0.0,False,scored,2026-08-15T09:54:07+00:00
+51,mistral-large-2512,2,"[0.0, 0.0]",0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T09:54:17+00:00
+52,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T09:54:25+00:00
+53,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T09:54:33+00:00
+54,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T09:54:41+00:00
+55,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T09:54:49+00:00
+56,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T09:54:58+00:00
+74,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T09:55:03+00:00
+75,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T09:55:04+00:00
+80,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T09:55:06+00:00
+81,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T09:55:07+00:00
+82,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T09:55:15+00:00
+83,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T09:55:23+00:00
+84,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T09:55:32+00:00
+85,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T09:55:40+00:00
+86,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T09:55:48+00:00
+87,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T09:55:56+00:00
+88,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T09:56:02+00:00
+96,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T09:56:03+00:00
+101,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T09:56:08+00:00
+107,mistral-large-2512,8,"[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]",0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T09:57:03+00:00
+108,mistral-large-2512,5,"[0.0, 0.0, 0.0, 0.0, 0.0]",0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T09:57:24+00:00
+109,mistral-large-2512,12,"[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]",0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T09:58:43+00:00
+110,mistral-large-2512,11,"[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]",0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T09:59:49+00:00
+111,mistral-large-2512,10,"[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]",0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:00:55+00:00
+115,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:01:03+00:00
+117,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:01:05+00:00
+119,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:01:06+00:00
+120,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:01:07+00:00
+121,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:01:09+00:00
+122,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:01:17+00:00
+123,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:01:25+00:00
+137,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:01:32+00:00
+138,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:01:40+00:00
+139,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:01:48+00:00
+140,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:01:57+00:00
+151,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:02:01+00:00
+152,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:02:03+00:00
+153,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:02:05+00:00
+154,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:02:06+00:00
+155,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:02:15+00:00
+166,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:02:22+00:00
+168,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:02:30+00:00
+173,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:02:39+00:00
+174,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:02:47+00:00
+175,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:02:55+00:00
+176,mistral-large-2512,1,[0.0],0.0,0.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:03:03+00:00
+177,mistral-large-2512,1,[1.0],1.0,0.0,0.0,False,scored,2026-08-15T10:03:05+00:00
+183,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:03:50+00:00
+186,mistral-large-2512,2,"[0.0, 0.0]",0.0,1.0,0.0,False,scored,2026-08-15T10:03:53+00:00
+191,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:04:01+00:00
+201,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:04:02+00:00
+202,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:04:04+00:00
+203,mistral-large-2512,2,"[0.0, 0.0]",0.0,1.0,0.0,False,scored,2026-08-15T10:04:07+00:00
+204,mistral-large-2512,3,"[0.0, 0.0, 0.0]",0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:04:31+00:00
+213,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:04:39+00:00
+214,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:04:48+00:00
+215,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:04:55+00:00
+216,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:05:04+00:00
+217,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:05:05+00:00
+218,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:05:06+00:00
+219,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:05:06+00:00
+220,mistral-large-2512,2,"[0.0, 0.0]",0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:05:15+00:00
+221,mistral-large-2512,3,"[0.0, 0.0, 0.0]",0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:05:40+00:00
+222,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:05:48+00:00
+223,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:05:56+00:00
+224,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:06:02+00:00
+225,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:06:02+00:00
+234,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:06:03+00:00
+235,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:06:03+00:00
+247,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:06:11+00:00
+253,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:06:19+00:00
+257,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:06:27+00:00
+267,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:06:35+00:00
+268,mistral-large-2512,1,[0.0],0.0,0.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:06:44+00:00
+287,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:06:52+00:00
+289,mistral-large-2512,3,"[0.0, 0.0, 0.0]",0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:07:04+00:00
+301,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:07:05+00:00
+302,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:07:05+00:00
+313,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:07:13+00:00
+332,mistral-large-2512,3,"[0.0, 0.0, 0.0]",0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:07:37+00:00
+334,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:07:45+00:00
+335,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:07:53+00:00
+336,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:08:01+00:00
+337,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:08:03+00:00
+338,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:08:04+00:00
+359,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:08:06+00:00
+361,mistral-large-2512,2,"[0.0, 0.0]",0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:08:15+00:00
+368,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:08:24+00:00
+376,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:08:33+00:00
+382,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:08:41+00:00
+491,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:08:49+00:00
+723,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:08:56+00:00
+726,mistral-large-2512,1,[1.0],1.0,1.0,1.0,True,scored,2026-08-15T10:09:00+00:00
+783,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:09:01+00:00
+789,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:09:01+00:00
+790,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:09:02+00:00
+791,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:09:10+00:00
+792,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:09:18+00:00
+793,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:09:25+00:00
+794,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:09:33+00:00
+795,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:09:41+00:00
+796,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:09:49+00:00
+797,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:09:57+00:00
+798,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:10:01+00:00
+17,mistral-large-2512,2,"[0.0, 0.0]",0.0,1.0,0.0,False,scored,2026-08-15T10:23:54+00:00
+18,mistral-large-2512,2,"[0.0, 0.0]",0.0,1.0,0.0,False,scored,2026-08-15T10:23:58+00:00
+19,mistral-large-2512,2,"[0.0, 0.0]",0.0,1.0,0.0,False,scored,2026-08-15T10:24:05+00:00
+20,mistral-large-2512,2,"[0.0, 0.0]",0.0,1.0,0.0,False,scored,2026-08-15T10:24:08+00:00
+35,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:24:16+00:00
+47,mistral-large-2512,2,"[0.0, 0.0]",0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:24:33+00:00
+48,mistral-large-2512,2,"[0.0, 0.0]",0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:24:49+00:00
+49,mistral-large-2512,2,"[0.0, 0.0]",0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:25:02+00:00
+51,mistral-large-2512,2,"[0.0, 0.0]",0.0,1.0,0.0,False,scored,2026-08-15T10:25:07+00:00
+52,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:25:08+00:00
+53,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:25:17+00:00
+54,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:25:25+00:00
+55,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:25:34+00:00
+56,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:25:42+00:00
+82,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:25:51+00:00
+83,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:25:59+00:00
+84,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:26:01+00:00
+85,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:26:03+00:00
+86,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:26:04+00:00
+87,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:26:06+00:00
+107,mistral-large-2512,8,"[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]",0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:27:05+00:00
+108,mistral-large-2512,5,"[0.0, 0.0, 0.0, 0.0, 0.0]",0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:27:28+00:00
+35,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:29:00+00:00
+47,mistral-large-2512,2,"[0.0, 0.0]",0.0,1.0,0.0,False,scored,2026-08-15T10:29:03+00:00
+48,mistral-large-2512,2,"[0.0, 0.0]",0.0,1.0,0.0,False,scored,2026-08-15T10:29:07+00:00
+49,mistral-large-2512,2,"[0.0, 0.0]",0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:29:24+00:00
+53,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:29:32+00:00
+54,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:29:40+00:00
+55,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:29:48+00:00
+56,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:29:56+00:00
+82,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:30:02+00:00
+83,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:30:03+00:00
+107,mistral-large-2512,8,"[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]",0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:30:57+00:00
+108,mistral-large-2512,5,"[0.0, 0.0, 0.0, 0.0, 0.0]",0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:31:18+00:00
+109,mistral-large-2512,12,"[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]",0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:32:35+00:00
+110,mistral-large-2512,11,"[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]",0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:33:43+00:00
+111,mistral-large-2512,10,"[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]",0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:34:44+00:00
+115,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:34:52+00:00
+122,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:35:00+00:00
+123,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:35:02+00:00
+137,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:35:03+00:00
+138,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:35:05+00:00
+139,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:35:06+00:00
+140,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:35:14+00:00
+155,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:35:23+00:00
+166,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:35:31+00:00
+168,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:35:39+00:00
+173,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:35:47+00:00
+174,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:35:56+00:00
+175,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:36:04+00:00
+176,mistral-large-2512,1,[1.0],1.0,0.0,0.0,False,scored,2026-08-15T10:36:06+00:00
+191,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:36:07+00:00
+204,mistral-large-2512,3,"[0.0, 0.0, 0.0]",0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:36:18+00:00
+213,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:36:26+00:00
+214,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:36:34+00:00
+215,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:36:42+00:00
+216,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:36:50+00:00
+220,mistral-large-2512,2,"[0.0, 0.0]",0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:37:01+00:00
+221,mistral-large-2512,3,"[0.0, 0.0, 0.0]",0.0,1.0,0.0,False,scored,2026-08-15T10:37:05+00:00
+222,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:37:13+00:00
+223,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:37:21+00:00
+247,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:37:29+00:00
+253,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:37:36+00:00
+257,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:37:45+00:00
+267,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:37:53+00:00
+268,mistral-large-2512,1,[0.0],0.0,0.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:38:01+00:00
+287,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:38:03+00:00
+289,mistral-large-2512,3,"[0.0, 0.0, 0.0]",0.0,1.0,0.0,False,scored,2026-08-15T10:38:08+00:00
+313,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:38:16+00:00
+332,mistral-large-2512,3,"[0.0, 0.0, 0.0]",0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:38:40+00:00
+334,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:38:48+00:00
+335,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:38:56+00:00
+336,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:39:01+00:00
+361,mistral-large-2512,2,"[0.0, 0.0]",0.0,1.0,0.0,False,scored,2026-08-15T10:39:05+00:00
+368,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:39:06+00:00
+376,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:39:14+00:00
+382,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:39:22+00:00
+491,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:39:30+00:00
+723,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:39:39+00:00
+791,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:39:46+00:00
+792,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:39:55+00:00
+793,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:40:03+00:00
+794,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:40:03+00:00
+795,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:40:04+00:00
+796,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:40:04+00:00
+797,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:40:05+00:00
+49,mistral-large-2512,2,"[0.0, 0.0]",0.0,1.0,0.0,False,scored,2026-08-15T10:46:30+00:00
+53,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:46:31+00:00
+54,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:46:33+00:00
+55,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:46:41+00:00
+56,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:46:49+00:00
+107,mistral-large-2512,8,"[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]",0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:47:33+00:00
+108,mistral-large-2512,5,"[0.0, 0.0, 0.0, 0.0, 0.0]",0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:48:05+00:00
+109,mistral-large-2512,12,"[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]",0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:49:07+00:00
+110,mistral-large-2512,11,"[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]",0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:50:29+00:00
+111,mistral-large-2512,10,"[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]",0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:51:27+00:00
+115,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:51:35+00:00
+122,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:51:43+00:00
+140,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:51:51+00:00
+155,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:51:59+00:00
+166,mistral-large-2512,1,[1.0],1.0,1.0,1.0,True,scored,2026-08-15T10:52:00+00:00
+168,mistral-large-2512,1,[1.0],1.0,1.0,1.0,True,scored,2026-08-15T10:52:01+00:00
+173,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:52:03+00:00
+174,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:52:05+00:00
+175,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:52:13+00:00
+204,mistral-large-2512,3,"[0.0, 0.0, 0.0]",0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:52:38+00:00
+213,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:52:46+00:00
+214,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:52:54+00:00
+215,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:53:03+00:00
+216,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:53:04+00:00
+220,mistral-large-2512,2,"[0.0, 0.0]",0.0,1.0,0.0,False,scored,2026-08-15T10:53:07+00:00
+222,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:53:08+00:00
+223,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:53:16+00:00
+247,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:53:24+00:00
+253,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:53:33+00:00
+257,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:53:41+00:00
+267,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:53:49+00:00
+268,mistral-large-2512,1,[0.0],0.0,0.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:53:57+00:00
+313,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:54:01+00:00
+332,mistral-large-2512,3,"[0.0, 0.0, 0.0]",0.0,1.0,0.0,False,scored,2026-08-15T10:54:06+00:00
+334,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:54:14+00:00
+335,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:54:22+00:00
+376,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:54:30+00:00
+382,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:54:38+00:00
+491,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:54:46+00:00
+723,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:54:55+00:00
+791,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,"judge_error: SDKError: API error occurred: Status 429. Body: {""object"":""error"",""message"":""Rate limit exceeded"",""type"":""rate_limited"",""param"":null,""code"":""1300"",""raw_status_code"":429}",2026-08-15T10:55:02+00:00
+792,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:55:03+00:00
+793,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:55:04+00:00
+55,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:56:41+00:00
+56,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T10:57:12+00:00
+107,mistral-large-2512,8,"[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]",0.0,1.0,0.0,False,scored,2026-08-15T11:03:30+00:00
+108,mistral-large-2512,5,"[0.0, 0.0, 0.0, 0.0, 0.0]",0.0,1.0,0.0,False,scored,2026-08-15T11:06:10+00:00
+109,mistral-large-2512,12,"[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]",0.0,1.0,0.0,False,scored,2026-08-15T11:12:37+00:00
+110,mistral-large-2512,11,"[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]",0.0,1.0,0.0,False,scored,2026-08-15T11:18:37+00:00
+111,mistral-large-2512,10,"[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]",0.0,1.0,0.0,False,scored,2026-08-15T11:24:02+00:00
+115,mistral-large-2512,1,[1.0],1.0,1.0,1.0,True,scored,2026-08-15T11:24:32+00:00
+122,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T11:25:04+00:00
+140,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T11:25:37+00:00
+155,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T11:26:08+00:00
+175,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T11:26:40+00:00
+204,mistral-large-2512,3,"[0.0, 0.0, 0.0]",0.0,1.0,0.0,False,scored,2026-08-15T11:28:14+00:00
+213,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T11:28:45+00:00
+214,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T11:29:16+00:00
+215,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T11:29:48+00:00
+223,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T11:30:20+00:00
+247,mistral-large-2512,1,[1.0],1.0,1.0,1.0,True,scored,2026-08-15T11:30:50+00:00
+253,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T11:31:20+00:00
+257,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T11:31:52+00:00
+267,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T11:32:26+00:00
+268,mistral-large-2512,1,[1.0],1.0,0.0,0.0,False,scored,2026-08-15T11:32:58+00:00
+334,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T11:33:29+00:00
+335,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T11:34:01+00:00
+376,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T11:34:31+00:00
+382,mistral-large-2512,1,[1.0],1.0,1.0,1.0,True,scored,2026-08-15T11:35:01+00:00
+491,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T11:35:32+00:00
+723,mistral-large-2512,1,[1.0],1.0,1.0,1.0,True,scored,2026-08-15T11:36:02+00:00
+791,mistral-large-2512,1,[0.0],0.0,1.0,0.0,False,scored,2026-08-15T11:36:33+00:00

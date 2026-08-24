@@ -1,4 +1,4 @@
 """WebArena batch runs: CSV schemas, resume bookkeeping, and memory building.
 
-The runners under scripts/webarena/ are argparse wrappers over this package.
+The harness under evaluation/webarena/ builds on this package.
 """

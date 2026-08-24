@@ -1,7 +1,7 @@
 """Shared paths, artefacts, and CSV loading for the four pipeline steps.
 
-The memories CSV contract matches scripts/webarena/common (extracted
-rows only, embedding re-attached)
+The memories CSV contract matches agent_memories.webarena.constants
+(extracted rows only, embedding re-attached)
 """
 
 from __future__ import annotations

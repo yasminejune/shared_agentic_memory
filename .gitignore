@@ -2,9 +2,6 @@
 venv/
 .claude/
 .vscode/
-docs/00_background/
-docs/01_research_documents/
-docs/02_proposal/
 
 # Ignore all files of a type
 *.log
@@ -63,15 +60,6 @@ htmlcov/
 # Thesis task curator (transient files; tasks.md itself should be tracked)
 .claude/thesis/.last-curated-sha
 .claude/thesis/curator.log
-
-# WP1.5 runtime memory stores
-data/memories/
-
-# WP3.2 WebArena batch runner CSV output
-data/webarena/
-
-# WP2 demo-harness outputs (run_post_processing_demo.py, WP2_8.py)
-scripts/amin_et_al/outputs/
 
 # Webarena requires environment settings which do not need to be tracked
 archives_webarena/
